@@ -1,2 +1,2 @@
 # paul_vision
-module de vision
+package du module de vision
