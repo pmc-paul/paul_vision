@@ -1,0 +1,18 @@
+<launch>
+
+    <arg name="rviz"                default="true"/>
+    <arg name="frame"               default="camera_depth_optical_frame"/>
+    <arg name="rviz_config_file"    default="rviz_cfg.rviz"/>
+    <arg name="rviz_cfg"            default="-d $(find paul_vision)/config/$(arg rviz_config_file)"/>
+
+    <!-- Launch camera
+    <include file="$(find realsense2_camera)/launch/rs_camera.launch">    
+        <arg name="filters" value="pointcloud"/>
+    </include> -->
+
+    <!-- Launch RVIZ -->
+    <!-- <node if="$(arg rviz)" name="rviz" pkg="rviz" type="rviz" args="$(arg rviz_cfg)"/> -->
+
+    <!-- Launch vision node -->
+    <node name="vision" pkg="paul_vision" type="paul_vision_node" output="screen"/>
+</launch>

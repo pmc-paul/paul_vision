@@ -1,0 +1,24 @@
+{
+  "configurations": [
+    {
+      "browse": {
+        "databaseFilename": "${workspaceFolder}/.vscode/browse.vc.db",
+        "limitSymbolsToIncludedHeaders": false
+      },
+      "includePath": [
+        "/home/victoria/paul/dev_ws/devel/include/**",
+        "/opt/ros/melodic/include/**",
+        "/home/victoria/paul/dev_ws/src/diff_drive_controller/include/**",
+        "/home/victoria/paul/dev_ws/src/motor_ctrl/include/**",
+        "/home/victoria/paul/dev_ws/src/paul_vision/include/**",
+        "/usr/include/**"
+      ],
+      "name": "ROS",
+      "intelliSenseMode": "gcc-x64",
+      "compilerPath": "/usr/bin/gcc",
+      "cStandard": "gnu11",
+      "cppStandard": "c++14"
+    }
+  ],
+  "version": 4
+}
