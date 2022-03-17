@@ -113,18 +113,16 @@ def callback(image_msg):
     for detection in image_boxes:
         bounding_box = BBox2d()
         cv2.rectangle(bbox_image, (detection[0], detection[1]), (detection[2], detection[3]), color, 2)
-        bounding_box.x1 = detection[0] #/ scalex
-        bounding_box.y1 = detection[1] #/scaley
-        bounding_box.x2 = detection[2] #/ scalex
-        bounding_box.y2 = detection[3] #/ scaley
+        bounding_box.x1 = detection[0] / scalex
+        bounding_box.y1 = detection[1] / scaley
+        bounding_box.x2 = detection[2] / scalex
+        bounding_box.y2 = detection[3] / scaley
         boxes_msg.boxes.append(bounding_box)
     if len(boxes_msg.boxes):
-        try:
-            boxes_msg.image = bridge.cv2_to_imgmsg(cv_image, 'bgr8')
-        except CvBridgeError as e:
-            print(e)
-        # boxes_msg.scale = scale
-        # boxes_msg.header = image_msg.header
+        # try:
+        #     boxes_msg.image = bridge.cv2_to_imgmsg(cv_image, 'bgr8')
+        # except CvBridgeError as e:
+        #     print(e)
         boxes_pub.publish(boxes_msg)
     image_pub = bridge.cv2_to_imgmsg(bbox_image)
     pub_image.publish((image_pub))
