@@ -10,7 +10,6 @@ project(paul_vision)
 find_package(catkin REQUIRED COMPONENTS
   rospy
   message_generation
-  geometry_msgs
   std_msgs
   sensor_msgs
 )

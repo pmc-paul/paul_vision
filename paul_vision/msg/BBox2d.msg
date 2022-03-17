@@ -1,7 +1,7 @@
-# Bottom left corner
+# top left corner
 float64 x1
 float64 y1
-
-# Top right corner
+# system right-down
+# bottom right corner
 float64 x2
 float64 y2

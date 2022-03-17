@@ -38,22 +38,19 @@ def resize_image(img, min_side=800, max_side=1333):
         A resized image.
     """
     (rows, cols, _) = img.shape
-
     smallest_side = min(rows, cols)
-
     # rescale the image so the smallest side is min_side
-    scale = min_side / smallest_side
+    scaley = min_side / smallest_side
 
     # check if the largest side is now greater than max_side, which can happen
     # when images have a large aspect ratio
     largest_side = max(rows, cols)
-    if largest_side * scale > max_side:
-        scale = max_side / largest_side
+    # if largest_side * scaley > max_side:
+    scalex = max_side / largest_side
 
     # resize the image with the computed scale
-    img = cv2.resize(img, None, fx=scale, fy=scale)
-
-    return img, scale
+    img = cv2.resize(img, None, fx=scalex, fy=scaley)
+    return img, scalex, scaley
 
 def preprocess_image(x):
     """ Preprocess an image by subtracting the ImageNet mean.
@@ -86,7 +83,7 @@ def preprocess_image(x):
 def callback(image_msg):
     #First convert the image to OpenCV image 
     cv_image = bridge.imgmsg_to_cv2(image_msg, 'bgr8')
-    cv_image, scale = resize_image(cv_image)
+    cv_image, scalex, scaley = resize_image(cv_image)
     
     image = preprocess_image(cv_image.copy())
     boxes, hard_scores, labels, soft_scores = model.predict(np.expand_dims(image, axis=0))            # Classify the image
@@ -112,24 +109,25 @@ def callback(image_msg):
     
     boxes_msg = BBox2d_array()
     print(image_boxes[:,0])
-    # bbox_image = cv_image.copy()
+    bbox_image = cv_image.copy()
     for detection in image_boxes:
         bounding_box = BBox2d()
         cv2.rectangle(bbox_image, (detection[0], detection[1]), (detection[2], detection[3]), color, 2)
-        bounding_box.x1 = detection[0]
-        bounding_box.y1 = detection[1] 
-        bounding_box.x2 = detection[2]
-        bounding_box.y2 = detection[3]
+        bounding_box.x1 = detection[0] #/ scalex
+        bounding_box.y1 = detection[1] #/scaley
+        bounding_box.x2 = detection[2] #/ scalex
+        bounding_box.y2 = detection[3] #/ scaley
         boxes_msg.boxes.append(bounding_box)
     if len(boxes_msg.boxes):
-        # try:
-        #     boxes_msg.image = bridge.cv2_to_imgmsg(cv_image, 'bgr8')
-        # except CvBridgeError as e:
-        #     print(e)
-        boxes_msg.scale = scale
+        try:
+            boxes_msg.image = bridge.cv2_to_imgmsg(cv_image, 'bgr8')
+        except CvBridgeError as e:
+            print(e)
+        # boxes_msg.scale = scale
+        # boxes_msg.header = image_msg.header
         boxes_pub.publish(boxes_msg)
-    # image_pub = bridge.cv2_to_imgmsg(bbox_image)
-    # pub_image.publish((image_pub))
+    image_pub = bridge.cv2_to_imgmsg(bbox_image)
+    pub_image.publish((image_pub))
     # plt.imshow(cv_image),plt.show()
 
         
