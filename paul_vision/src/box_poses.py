@@ -11,7 +11,7 @@ import numpy as np
 import pyrealsense2 as rs2
 
 
-class PoseExport:
+class transform_pose:
     def imageDepthCallback(self, data):
         if self.array is not None:
             try:
@@ -74,6 +74,7 @@ class PoseExport:
         self.sub_info = rospy.Subscriber(depth_info_topic, CameraInfo, self.imageDepthInfoCallback) 
         self.sub_bbox = rospy.Subscriber(bounding_box_topic, BBox2d_array, self.BBoxCallback) 
         self.pose_pub = rospy.Publisher('arm_go_to', PointStamped, queue_size = 1) 
+        
 
         self.intrinsics = None
         
@@ -86,7 +87,7 @@ def main():
     depth_info_topic = '/camera/aligned_depth_to_color/camera_info'
     bounding_box_topic = '/bounding_boxes'
     
-    listener = PoseExport(depth_image_topic, depth_info_topic, bounding_box_topic)
+    listener = transform_pose(depth_image_topic, depth_info_topic, bounding_box_topic)
     rospy.spin()
 
 if __name__ == '__main__':

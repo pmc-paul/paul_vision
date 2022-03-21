@@ -11,6 +11,10 @@ import os
 bridge = CvBridge()
 import rospkg
 
+# dictionnary of objets
+# bbox coordinates
+# name of object with most match
+# number of matches
 
 class find_item:
     def __init__(self):
@@ -62,47 +66,49 @@ class find_item:
             cv2.waitKey(30)
 
 
-    def bbox_callback(self, processed_image):
-        self.array = processed_image.boxes
-        if len(self.array)>0 and self.article_path != '':
-            try: 
-                stream = bridge.imgmsg_to_cv2(processed_image.image, 'bgr8')
-            except CvBridgeError as e:
-                print("CvBridge could not convert images from realsense to opencv")
+    def image_callback_bbox(self, image):
+        try: 
+            stream = bridge.imgmsg_to_cv2(image, 'bgr8')
+        except CvBridgeError as e:
+            print("CvBridge could not convert images from realsense to opencv")
+        if len(self.array) and self.article_path != '':
+            for box in self.array:
+                img1 = cv2.imread(self.article_path,cv2.IMREAD_GRAYSCALE) # queryImage
+                img1 = cv2.normalize(img1, None, 0, 255, cv2.NORM_MINMAX)
+                
+                img2 = stream[int(box.y1):int(box.y2),int(box.x1):int(box.x2)].copy()
+                img2 = cv2.resize(img2,(img2.shape[1],img2.shape[0]))
+                img2 = cv2.cvtColor(img2, cv2.COLOR_BGR2GRAY)
 
-            img1 = cv2.imread(self.article_path,cv2.IMREAD_GRAYSCALE) # queryImage
-            img1 = cv2.normalize(img1, None, 0, 255, cv2.NORM_MINMAX)
-            
-            img2 = stream[int(self.array[0].y1):int(self.array[0].y2),int(self.array[0].x1):int(self.array[0].x2)].copy()
-            img2 = cv2.resize(img2,(img2.shape[1]*4,img2.shape[0]*4))
-            img2 = cv2.cvtColor(img2, cv2.COLOR_BGR2GRAY)
+                sift = cv2.xfeatures2d.SIFT_create()
 
-            sift = cv2.xfeatures2d.SIFT_create()
+                keypoints1, descriptors1 = sift.detectAndCompute(img1, None)
+                keypoints2, descriptors2 = sift.detectAndCompute(img2, None)
 
-            keypoints1, descriptors1 = sift.detectAndCompute(img1, None)
-            keypoints2, descriptors2 = sift.detectAndCompute(img2, None)
+                FLAN_INDEX_KDTREE = 0
+                index_params = dict (algorithm = FLAN_INDEX_KDTREE, trees=5)
+                search_params = dict (checks=50)
 
-            FLAN_INDEX_KDTREE = 0
-            index_params = dict (algorithm = FLAN_INDEX_KDTREE, trees=5)
-            search_params = dict (checks=50)
+                flann = cv2.FlannBasedMatcher(index_params, search_params)
+                matches = flann.knnMatch (descriptors1, descriptors2, k=2)
 
-            flann = cv2.FlannBasedMatcher(index_params, search_params)
-            matches = flann.knnMatch (descriptors1, descriptors2, k=2)
+                matchesMask = [[0,0] for i in range(len(matches))]
+                for i,(m1, m2) in enumerate (matches):
+                    if m1.distance < 0.5 * m2.distance:
+                        matchesMask[i] = [1,0]
 
-            matchesMask = [[0,0] for i in range(len(matches))]
-            for i,(m1, m2) in enumerate (matches):
-                if m1.distance < 0.5 * m2.distance:
-                    matchesMask[i] = [1,0]
+                draw_params = dict (matchColor = (0,0,255), singlePointColor = (0,255,0), matchesMask = matchesMask, flags=0 )
+                print(matchesMask.count([1,0]))   
+                flann_matches =cv2.drawMatchesKnn(img1, keypoints1, img2, keypoints2, matches, None,**draw_params)
+                cv2.imshow('result',flann_matches)
 
-            draw_params = dict (matchColor = (0,0,255), singlePointColor = (0,255,0), matchesMask = matchesMask, flags=0 )
-            print(matchesMask.count([1,0]))   
-            flann_matches =cv2.drawMatchesKnn(img1, keypoints1, img2, keypoints2, matches, None,**draw_params)
-            cv2.imshow('result',flann_matches)
+                # img3 = cv2.polylines(img3, [np.int32(dst)], True, (0,0,255),3, cv2.LINE_AA)
+                # plt.imshow(img3),plt.show()
+                # cv2.imshow("result", img3)
+                cv2.waitKey(30)
 
-            # img3 = cv2.polylines(img3, [np.int32(dst)], True, (0,0,255),3, cv2.LINE_AA)
-            # plt.imshow(img3),plt.show()
-            # cv2.imshow("result", img3)
-            cv2.waitKey(30)
+    def bbox_callback(self, bbox):
+        self.array = bbox.boxes
         
 
     def shutdown(self):
@@ -112,8 +118,8 @@ class find_item:
         rospy.init_node('detection_node')
         # global self.article_path
         rospy.Subscriber('find_item', String, self.item_callback)
-        # rospy.Subscriber('/camera/color/image_raw', Image, self.image_callback_bbox)
-        rospy.Subscriber('bounding_boxes', BBox2d_array, self.bbox_callback)
+        rospy.Subscriber('/camera/color/image_raw', Image, self.image_callback_bbox)
+        rospy.Subscriber('classification_bounding_boxes', BBox2d_array, self.bbox_callback)
 
         rospy.spin() 
         rospy.on_shutdown(self.shutdown)
