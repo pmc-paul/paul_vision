@@ -23,7 +23,7 @@ model = models.load_model(os.path.join(root_dir(), "iou_resnet50_csv_06.h5"), ba
 model._make_predict_function()
 
 rospy.init_node('prediction_node')
-boxes_pub = rospy.Publisher('bounding_boxes', BBox2d_array, queue_size = 1)
+boxes_pub = rospy.Publisher('bounding_boxes_segmentation', BBox2d_array, queue_size = 1)
 pub_image = rospy.Publisher('prediction_image', Image, queue_size = 1)
 bridge = CvBridge()
 

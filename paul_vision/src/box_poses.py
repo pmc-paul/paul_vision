@@ -13,12 +13,12 @@ import pyrealsense2 as rs2
 
 class transform_pose:
     def imageDepthCallback(self, data):
-        if self.array is not None:
+        if self.input_bbox_array is not None:
             try:
                 cv_image = self.bridge.imgmsg_to_cv2(data, data.encoding)
                 if self.intrinsics:
                     bbox_3d_array = BBox3d_array()
-                    for box in self.array:
+                    for box in self.input_bbox_array:
                         bounding_box_3d = BBox3d()
 
                         center = [box.x1 + (box.x2-box.x1)/2, box.y1 + (box.y2-box.y1)/2]
@@ -64,7 +64,7 @@ class transform_pose:
             return
 
     def BBoxCallback(self, bbox_array):
-        self.array = bbox_array.boxes
+        self.input_bbox_array = bbox_array.boxes
 
 
 
@@ -72,22 +72,23 @@ class transform_pose:
         self.bridge = CvBridge()
         self.sub = rospy.Subscriber(depth_image_topic, msg_Image, self.imageDepthCallback)
         self.sub_info = rospy.Subscriber(depth_info_topic, CameraInfo, self.imageDepthInfoCallback) 
-        self.sub_bbox = rospy.Subscriber(bounding_box_topic, BBox2d_array, self.BBoxCallback) 
-        self.pose_pub = rospy.Publisher('arm_go_to', PointStamped, queue_size = 1) 
+        self.sub_bbox = rospy.Subscriber(bbox_segmentation_topic, BBox2d_array, self.BBoxCallback) 
+        self.pose_pub = rospy.Publisher('bounding_boxes_3d', BBox3d_array, queue_size = 1) 
         
 
         self.intrinsics = None
-        
-        self.array = None
+        self.input_bbox_array = None
 
 
 
 def main():
     depth_image_topic = '/camera/aligned_depth_to_color/image_raw'
     depth_info_topic = '/camera/aligned_depth_to_color/camera_info'
-    bounding_box_topic = '/bounding_boxes'
+    bbox_segmentation_topic = '/bounding_boxes_segmentation'
+    # bbox_classification_topic = 
+
     
-    listener = transform_pose(depth_image_topic, depth_info_topic, bounding_box_topic)
+    node = transform_pose(depth_image_topic, depth_info_topic, bounding_box_topic)
     rospy.spin()
 
 if __name__ == '__main__':
