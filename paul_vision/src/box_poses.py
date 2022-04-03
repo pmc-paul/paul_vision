@@ -85,7 +85,6 @@ def main():
     depth_image_topic = '/camera/aligned_depth_to_color/image_raw'
     depth_info_topic = '/camera/aligned_depth_to_color/camera_info'
     bbox_segmentation_topic = '/bounding_boxes_segmentation'
-    # bbox_classification_topic = 
 
     
     node = transform_pose(depth_image_topic, depth_info_topic, bounding_box_topic)

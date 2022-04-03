@@ -52,6 +52,10 @@ add_message_files(
   FILES
   BBox2d.msg
   BBox2d_array.msg
+  BBox3d.msg
+  BBox3d_array.msg
+  artcile.msg
+  classified_items.msg
 )
 
 ## Generate services in the 'srv' folder

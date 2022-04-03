@@ -41,8 +41,10 @@ class find_item:
         except CvBridgeError as e:
             print("CvBridge could not convert images from realsense to opencv")
         
+        # est-ce qu'on crop le flux video en sections predefinis pour iterer au travers des sections d'image
         # img2 = stream[int(box.y1):int(box.y2),int(box.x1):int(box.x2)].copy()
-        img2 = cv2.resize(stream,(img2.shape[1],img2.shape[0]))
+        img2 = stream.copy()
+        img2 = cv2.resize(img2,(img2.shape[1],img2.shape[0]))
         img2 = cv2.cvtColor(img2, cv2.COLOR_BGR2GRAY)
 
         sift = cv2.xfeatures2d.SIFT_create()
@@ -72,11 +74,11 @@ class find_item:
             # Sort by their distance.
             matches = sorted(matches, key = lambda x:x[0].distance)
             good = [m1 for (m1, m2) in matches if m1.distance < 0.7 * m2.distance]
-
+            # pts = []
             if matchesMask.count([1,0]) > minimum_match:
                 # best_match = matchesMask.count([1,0])
                 article_match = str(article)
-                print(matchesMask.count([1,0]) + "or" + str(len(good))) 
+                print(str(matchesMask.count([1,0])) + "or" + str(len(good))) 
 
                 src_pts = np.float32([ keypoints1[m.queryIdx].pt for m in good ]).reshape(-1,1,2)
                 dst_pts = np.float32([ keypoints2[m.trainIdx].pt for m in good ]).reshape(-1,1,2)
@@ -91,7 +93,7 @@ class find_item:
                     flann_matches =cv2.drawMatchesKnn(img1, keypoints1, img3, keypoints2, matches, None,**draw_params)
                     cv2.imshow('result',flann_matches)
                     cv2.waitKey(30)
-            print(article_match + ' number of matches: ' + str(best_match))
+                print(str(article_match) + ' number of matches: ' + str(matchesMask.count([1,0])), str(pts))
 
 
     def image_callback_bbox(self, image):
@@ -165,9 +167,9 @@ class find_item:
         rospy.init_node('detection_node')
         # global self.article_path
         rospy.Subscriber('find_item', String, self.item_callback)
-        rospy.Subscriber('/camera/color/image_raw', Image, self.image_callback_matching)
-        # rospy.Subscriber('/camera/color/image_raw', Image, self.image_callback_bbox)
-        # rospy.Subscriber('classification_bounding_boxes', BBox2d_array, self.bbox_callback)
+        # rospy.Subscriber('/camera/color/image_raw', Image, self.image_callback_matching)
+        rospy.Subscriber('/camera/color/image_raw', Image, self.image_callback_bbox)
+        rospy.Subscriber('classification_bounding_boxes', BBox2d_array, self.bbox_callback)
 
         rospy.spin() 
         rospy.on_shutdown(self.shutdown)

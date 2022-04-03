@@ -33,12 +33,26 @@ class two_step_classification:
         self.sub_bbox = rospy.Subscriber(bounding_box_topic, BBox3d_array, self.BBoxCallback) 
 
 
+    def arm_go_to(self, boxes):
+        print(boxes)
+        # calculate arm coordonates for batches?
+        # left to right
+
     def BBoxCallback(self, msg):
         for box in msg:
             print(box)
 
 #  mode sans segmentation
 class one_step_classification:
+
+    # callback pour chaque match + 25 points
+    # comparaison iou pour bounding box
+    # assignement d'un id si nouvelle boite
+    # comparaison confidence si pas nouveau
+    # changement nom et confidence si nouveau match meilleur
+
+
+
     def get_iou(bb1, bb2):
         """
         Calculate the Intersection over Union (IoU) of two bounding boxes.
