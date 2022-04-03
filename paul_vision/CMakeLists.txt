@@ -54,7 +54,7 @@ add_message_files(
   BBox2d_array.msg
   BBox3d.msg
   BBox3d_array.msg
-  artcile.msg
+  article.msg
   classified_items.msg
 )
 
@@ -76,7 +76,8 @@ add_message_files(
 generate_messages(
   DEPENDENCIES
   std_msgs
-  sensor_msgs  # Or other packages containing msgs
+  sensor_msgs 
+  geometry_msgs # Or other packages containing msgs
 )
 
 ################################################
