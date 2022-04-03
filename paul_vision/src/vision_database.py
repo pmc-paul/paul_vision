@@ -1,8 +1,15 @@
 #!/usr/bin/env python3
 import rospy
+import sys
+import os
+import numpy as np
 from geometry_msgs.msg import Pose, PointStamped
 from cv_bridge import CvBridge, CvBridgeError
+from sensor_msgs.msg import CameraInfo, Image
+from realsense2_camera.msg import Extrinsics
 from paul_vision.msg import BBox2d, BBox2d_array, BBox3d, BBox3d_array, article, classified_items
+import pyrealsense2 as rs2
+import cv2
 
 ## bounding boxes complete info:
 # bounding box 3d from original
@@ -15,22 +22,30 @@ from paul_vision.msg import BBox2d, BBox2d_array, BBox3d, BBox3d_array, article,
 
 # mode avec segmentation
 class two_step_classification:
-    def init(self, bounding_box_topic):
+    def __init__(self):
         # coordonnees avec rail
         self.original_arm_pose = Pose()
-        self.original_arm_pose.Point.x = 0
-        self.original_arm_pose.Point.y = 0
-        self.original_arm_pose.Point.z = 0
+        self.original_arm_pose.position.x = 0
+        self.original_arm_pose.position.y = 0
+        self.original_arm_pose.position.z = 0
 
         self.current_arm_pose = Pose()
-        self.current_arm_pose.Point.x = 0
-        self.current_arm_pose.Point.y = 0
-        self.current_arm_pose.Point.z = 0.4 # meters
-
+        self.current_arm_pose.position.x = 0
+        self.current_arm_pose.position.y = 0
+        self.current_arm_pose.position.z = 0.61 # meters
+        self.extrinsics_depth = None
+        self.intrinsics_color = None
+        self.color_pixel_up = None
+        self.color_pixel_down = None
+        self.bbox = None
         self.bridge = CvBridge()
-        # self.sub = rospy.Subscriber(depth_image_topic, msg_Image, self.imageDepthCallback)
-        # self.sub_info = rospy.Subscriber(depth_info_topic, CameraInfo, self.imageDepthInfoCallback) 
-        self.sub_bbox = rospy.Subscriber(bounding_box_topic, BBox3d_array, self.BBoxCallback) 
+        self.sub = rospy.Subscriber('/camera/color/image_raw', Image, self.imageColorCallback)
+        self.sub_info = rospy.Subscriber('/camera/extrinsics/depth_to_color', Extrinsics, self.imageDepthInfoCallback) 
+        self.sub_info = rospy.Subscriber('/camera/color/camera_info', CameraInfo, self.imageColorInfoCallback) 
+        self.sub_bbox = rospy.Subscriber('/bounding_boxes_3d', BBox3d_array, self.BBoxCallback)
+        self.pub_image = rospy.Publisher('prediction_2d_bbox', Image, queue_size = 1)
+        self.pub_bbox2d = rospy.Publisher('classification_bounding_boxes', BBox2d_array, queue_size = 1)
+        print('init') 
 
 
     def arm_go_to(self, boxes):
@@ -38,9 +53,75 @@ class two_step_classification:
         # calculate arm coordonates for batches?
         # left to right
 
+
+    def imageDepthInfoCallback(self, extrinsics_msg):
+        self.extrinsics_depth = rs2.extrinsics()
+        self.extrinsics_depth.rotation = extrinsics_msg.rotation
+        self.extrinsics_depth.translation = extrinsics_msg.translation
+         
+    def imageColorInfoCallback(self, cameraInfo):
+        try:
+            if self.intrinsics_color:
+                return
+            self.intrinsics_color = rs2.intrinsics()
+            self.intrinsics_color.width = cameraInfo.width
+            self.intrinsics_color.height = cameraInfo.height
+            self.intrinsics_color.ppx = cameraInfo.K[2]
+            self.intrinsics_color.ppy = cameraInfo.K[5]
+            self.intrinsics_color.fx = cameraInfo.K[0]
+            self.intrinsics_color.fy = cameraInfo.K[4]
+            if cameraInfo.distortion_model == 'plumb_bob':
+                self.intrinsics_color.model = rs2.distortion.brown_conrady
+            elif cameraInfo.distortion_model == 'equidistant':
+                self.intrinsics_color.model = rs2.distortion.kannala_brandt4
+            self.intrinsics_color.coeffs = [i for i in cameraInfo.D]
+        except CvBridgeError as e:
+            print(e)
+            return
+
     def BBoxCallback(self, msg):
-        for box in msg:
-            print(box)
+        # for box in msg.boxes:
+        box = msg.boxes[0]
+        box.depth = box.depth - (self.current_arm_pose.position.z - self.original_arm_pose.position.z)
+        # box.depth = 0.5
+        depth_point = [box.x1, box.y1, box.depth]
+        # print(depth_point)
+        # remettre point to pint pour tester de proche
+        # color_point = rs2.rs2_transform_point_to_point(self.extrinsics_depth, depth_point)
+        self.color_pixel_up = rs2.rs2_project_point_to_pixel(self.intrinsics_color, depth_point)
+        depth_point = [box.x2, box.y2, box.depth]
+        # color_point = rs2.rs2_transform_point_to_point(self.extrinsics_depth, depth_point)
+        self.color_pixel_down = rs2.rs2_project_point_to_pixel(self.intrinsics_color, depth_point)
+        print(depth_point)
+        # print(color_point)
+        print(self.color_pixel_down)
+        bbox_msg = BBox2d_array()
+        self.bbox = BBox2d()
+        self.bbox.x1 = (self.color_pixel_up[1])
+        self.bbox.y1 = (self.color_pixel_up[0])
+        self.bbox.x2 = (self.color_pixel_down[1])
+        self.bbox.y2 = (self.color_pixel_down[0])
+        # self.bbox.x1 = 0.8*(640-self.color_pixel_up[0])
+        # self.bbox.y1 = 0.8*(480-self.color_pixel_up[1])
+        # self.bbox.x2 = 1.2*(640-self.color_pixel_down[0])
+        # self.bbox.y2 = 1.2*(480-self.color_pixel_down[1])
+        bbox_msg.boxes.append(self.bbox)
+        self.pub_bbox2d.publish(bbox_msg)
+        
+        
+    def imageColorCallback(self, msg):
+        if self.bbox is not None:
+            cv_image = self.bridge.imgmsg_to_cv2(msg, 'bgr8')
+            color = (0, 0, 255)
+            bbox_image = cv_image.copy()
+            cv2.rectangle(bbox_image, (int(self.bbox.x1), int(self.bbox.y1)), (int(self.bbox.x2), int(self.bbox.y2)), color, 2)
+            # cv2.rectangle(bbox_image, (int(550), int(278)), (int(800), int(410)), color, 2)
+            print(self.bbox)
+            # print(self.color_pixel_down[0])
+            # print(int(self.color_pixel_up[0]))
+            image_pub = self.bridge.cv2_to_imgmsg(bbox_image)
+            self.pub_image.publish((image_pub))
+            
 
 #  mode sans segmentation
 class one_step_classification:
@@ -110,7 +191,7 @@ def main():
     # bbox_classification_topic = 
 
     
-    node = two_step_classification(bounding_box_topic)
+    node = two_step_classification()
     # node = one_step_classification()
     rospy.spin()
 

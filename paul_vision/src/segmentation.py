@@ -82,6 +82,7 @@ def preprocess_image(x):
 
 def callback(image_msg):
     #First convert the image to OpenCV image 
+    original_img = bridge.imgmsg_to_cv2(image_msg, 'bgr8').copy()
     cv_image = bridge.imgmsg_to_cv2(image_msg, 'bgr8')
     cv_image, scalex, scaley = resize_image(cv_image)
     
@@ -108,23 +109,24 @@ def callback(image_msg):
     color = (0, 0, 255)
     
     boxes_msg = BBox2d_array()
-    print(image_boxes[:,0])
+    # print(image_boxes[:,0])
     bbox_image = cv_image.copy()
     for detection in image_boxes:
         bounding_box = BBox2d()
-        cv2.rectangle(bbox_image, (detection[0], detection[1]), (detection[2], detection[3]), color, 2)
         bounding_box.x1 = detection[0] / scalex
         bounding_box.y1 = detection[1] / scaley
         bounding_box.x2 = detection[2] / scalex
         bounding_box.y2 = detection[3] / scaley
         boxes_msg.boxes.append(bounding_box)
+        cv2.rectangle(original_img, (int(bounding_box.x1), int(bounding_box.y1)), (int(bounding_box.x2), int(bounding_box.y2)), color, 2)
     if len(boxes_msg.boxes):
+        print(boxes_msg.boxes)
         # try:
         #     boxes_msg.image = bridge.cv2_to_imgmsg(cv_image, 'bgr8')
         # except CvBridgeError as e:
         #     print(e)
         boxes_pub.publish(boxes_msg)
-    image_pub = bridge.cv2_to_imgmsg(bbox_image)
+    image_pub = bridge.cv2_to_imgmsg(original_img)
     pub_image.publish((image_pub))
     # plt.imshow(cv_image),plt.show()
 

@@ -104,7 +104,9 @@ class find_item:
             print("CvBridge could not convert images from realsense to opencv")
         if len(self.bbox_array): # and self.article_path != '':
             for box in self.bbox_array:
+                # print(box)
                 img2 = stream[int(box.y1):int(box.y2),int(box.x1):int(box.x2)].copy()
+                # print(img2.shape)
                 img2 = cv2.resize(img2,(img2.shape[1],img2.shape[0]))
                 img2 = cv2.cvtColor(img2, cv2.COLOR_BGR2GRAY)
 
@@ -134,7 +136,7 @@ class find_item:
                     # Sort by their distance.
                     matches = sorted(matches, key = lambda x:x[0].distance)
                     good = [m1 for (m1, m2) in matches if m1.distance < 0.7 * m2.distance]
-
+                    print(matchesMask.count([1,0]))
                     if matchesMask.count([1,0]) > best_match:
                         best_match = matchesMask.count([1,0])
                         article_match = str(article)
@@ -153,10 +155,14 @@ class find_item:
                         flann_matches =cv2.drawMatchesKnn(img1, keypoints1, img2, keypoints2, matches, None,**draw_params)
                         cv2.imshow('result',flann_matches)
                         cv2.waitKey(30)
-                print(article_match + ' number of matches: ' + str(best_match))
+                        print(article_match + ' number of matches: ' + str(best_match))
 
     def bbox_callback(self, bbox):
-        self.bbox_array = bbox.boxes
+        bbox_array = bbox.boxes
+        for box in bbox_array:
+            box.x1 = np.max((box.x1, 1))
+            box.x2 = np.max((box.x2, 1))
+        self.bbox_array = bbox_array
         # print(self.bbox_array)
         
 

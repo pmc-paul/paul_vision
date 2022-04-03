@@ -15,26 +15,38 @@ class transform_pose:
     def imageDepthCallback(self, data):
         if self.input_bbox_array is not None:
             try:
-                cv_image = self.bridge.imgmsg_to_cv2(data, data.encoding)
+                cv_image = self.bridge.imgmsg_to_cv2(data, data.encoding).copy()
                 if self.intrinsics:
                     bbox_3d_array = BBox3d_array()
                     for box in self.input_bbox_array:
                         bounding_box_3d = BBox3d()
-
-                        center = [box.x1 + (box.x2-box.x1)/2, box.y1 + (box.y2-box.y1)/2]
-                        result = rs2.rs2_deproject_pixel_to_point(self.intrinsics, [center[0], center[1]], cv_image[int(center[1]), int(center[0])])
+                        # print(box)
+                        # print(cv_image.shape)
+                        center = [box.y1 + (box.y2-box.y1)/2, box.x1 + (box.x2-box.x1)/2]
+                        image_copy = cv_image.copy()
+                        result = rs2.rs2_deproject_pixel_to_point(self.intrinsics, [center[0], center[1]], image_copy[int(center[0]), int(center[1])])
                         bounding_box_3d.depth = result[2] / 1000
 
-                        result = rs2.rs2_deproject_pixel_to_point(self.intrinsics, [box.x1, box.y1], cv_image[int(box.x1), int(box.y1)])
-                        bounding_box_3d.x1 = result[0] / 1000
-                        bounding_box_3d.y1 = result[1] / 1000
 
-                        result = rs2.rs2_deproject_pixel_to_point(self.intrinsics, [box.x2, box.y2], cv_image[int(box.x2), int(box.y2)])
-                        bounding_box_3d.x2 = result[0] / 1000
+                        result = rs2.rs2_deproject_pixel_to_point(self.intrinsics, [box.y1, box.x1], image_copy[int(center[0]), int(center[1])])
+                        bounding_box_3d.y1 = result[1] / 1000
+                        bounding_box_3d.x1 = result[0] / 1000
+
+                        result = rs2.rs2_deproject_pixel_to_point(self.intrinsics, [box.y2, box.x2], image_copy[int(center[0]), int(center[1])])
                         bounding_box_3d.y2 = result[1] / 1000
+                        bounding_box_3d.x2 = result[0] / 1000
+
+                        point_pub = PointStamped()
+                        point_pub.header = data.header
+                        point_pub.point.x = result[0] / 1000
+                        point_pub.point.y = result[1] / 1000
+                        point_pub.point.z = result[2] / 1000
+
                         
-                        bbox_3d_array.append(bounding_box_3d)
+                        self.point_pub.publish(point_pub)
+                        bbox_3d_array.boxes.append(bounding_box_3d)
                     bbox_3d_array.header = data.header
+                    # print('here')
                     self.pose_pub.publish(bbox_3d_array)
             except CvBridgeError as e:
                 print(e)
@@ -68,12 +80,13 @@ class transform_pose:
 
 
 
-    def __init__(self, depth_image_topic, depth_info_topic, bounding_box_topic):
+    def __init__(self, depth_image_topic, depth_info_topic, bbox_segmentation_topic):
         self.bridge = CvBridge()
         self.sub = rospy.Subscriber(depth_image_topic, msg_Image, self.imageDepthCallback)
         self.sub_info = rospy.Subscriber(depth_info_topic, CameraInfo, self.imageDepthInfoCallback) 
         self.sub_bbox = rospy.Subscriber(bbox_segmentation_topic, BBox2d_array, self.BBoxCallback) 
         self.pose_pub = rospy.Publisher('bounding_boxes_3d', BBox3d_array, queue_size = 1) 
+        self.point_pub = rospy.Publisher('center', PointStamped, queue_size=1)
         
 
         self.intrinsics = None
@@ -87,7 +100,7 @@ def main():
     bbox_segmentation_topic = '/bounding_boxes_segmentation'
 
     
-    node = transform_pose(depth_image_topic, depth_info_topic, bounding_box_topic)
+    node = transform_pose(depth_image_topic, depth_info_topic, bbox_segmentation_topic)
     rospy.spin()
 
 if __name__ == '__main__':
