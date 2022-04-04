@@ -173,9 +173,9 @@ class find_item:
         rospy.init_node('detection_node')
         # global self.article_path
         rospy.Subscriber('find_item', String, self.item_callback)
-        # rospy.Subscriber('/camera/color/image_raw', Image, self.image_callback_matching)
-        rospy.Subscriber('/camera/color/image_raw', Image, self.image_callback_bbox)
-        rospy.Subscriber('classification_bounding_boxes', BBox2d_array, self.bbox_callback)
+        rospy.Subscriber('/camera/color/image_raw', Image, self.image_callback_matching)
+        # rospy.Subscriber('/camera/color/image_raw', Image, self.image_callback_bbox)
+        # rospy.Subscriber('classification_bounding_boxes', BBox2d_array, self.bbox_callback)
 
         rospy.spin() 
         rospy.on_shutdown(self.shutdown)

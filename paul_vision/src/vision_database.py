@@ -93,7 +93,6 @@ class two_step_classification:
         # color_point = rs2.rs2_transform_point_to_point(self.extrinsics_depth, depth_point)
         self.color_pixel_down = rs2.rs2_project_point_to_pixel(self.intrinsics_color, depth_point)
         print(depth_point)
-        # print(color_point)
         print(self.color_pixel_down)
         bbox_msg = BBox2d_array()
         self.bbox = BBox2d()
