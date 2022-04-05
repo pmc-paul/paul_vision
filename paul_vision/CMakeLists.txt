@@ -54,7 +54,7 @@ add_message_files(
   BBox2d_array.msg
   BBox3d.msg
   BBox3d_array.msg
-  article.msg
+  item.msg
   classified_items.msg
 )
 

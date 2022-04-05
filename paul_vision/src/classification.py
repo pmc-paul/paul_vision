@@ -4,8 +4,8 @@ import cv2
 import matplotlib.pyplot as plt
 import rospy
 from cv_bridge import CvBridge, CvBridgeError
-from std_msgs.msg import String
-from paul_vision.msg import BBox2d, BBox2d_array
+from std_msgs.msg import String, Int64
+from paul_vision.msg import BBox2d, BBox2d_array, item
 from sensor_msgs.msg import Image
 import os
 bridge = CvBridge()
@@ -21,7 +21,7 @@ class find_item:
         self.article_path = ''
         self.bbox_array = []
         cwd = rospkg.RosPack().get_path('paul_vision')
-        self.articles_folder = cwd + '/articles/'
+        self.articles_folder = cwd + '/cannes/'
         self.articles_array = []
         for images in os.listdir(self.articles_folder):
             if (images.endswith(".png")):
@@ -29,7 +29,7 @@ class find_item:
                 self.articles_array.append(images)
 
     def item_callback(self, name):
-        #find article path
+        #find unique article
         cwd = rospkg.RosPack().get_path('paul_vision')
         self.article_path = cwd + '/articles/' + name.data + '.png'
         print(self.article_path)
@@ -37,146 +37,85 @@ class find_item:
     def image_callback_matching(self, image):
         # to use without the segmentation pre-process
         try: 
-            stream = bridge.imgmsg_to_cv2(image, 'bgr8')
+            camera_stream = bridge.imgmsg_to_cv2(image, 'bgr8')
         except CvBridgeError as e:
             print("CvBridge could not convert images from realsense to opencv")
         
-        # est-ce qu'on crop le flux video en sections predefinis pour iterer au travers des sections d'image
-        # img2 = stream[int(box.y1):int(box.y2),int(box.x1):int(box.x2)].copy()
-        img2 = stream.copy()
-        img2 = cv2.resize(img2,(img2.shape[1],img2.shape[0]))
-        img2 = cv2.cvtColor(img2, cv2.COLOR_BGR2GRAY)
+        sections = [[0,200], [110,310], [220,420], [330, 530], [440,640]]
 
-        sift = cv2.xfeatures2d.SIFT_create()
-        keypoints2, descriptors2 = sift.detectAndCompute(img2, None)
-        minimum_match = 25
+        minimum_match = 35
         article_match = ''
+        for section in sections:
+            stream = camera_stream.copy()
+            img2 = stream[0:,section[0]:section[1]].copy()
+            img2 = cv2.resize(img2,(img2.shape[1],img2.shape[0]))
+            img2 = cv2.cvtColor(img2, cv2.COLOR_BGR2GRAY)
 
-        for article in self.articles_array:
-            article_path = self.articles_folder + article
-            img1 = cv2.imread(article_path,cv2.IMREAD_GRAYSCALE) # queryImage
-            img1 = cv2.normalize(img1, None, 0, 255, cv2.NORM_MINMAX)
+            sift = cv2.xfeatures2d.SIFT_create()
+            keypoints2, descriptors2 = sift.detectAndCompute(img2, None)
+            # print('************************')
             
-            keypoints1, descriptors1 = sift.detectAndCompute(img1, None)
+            for article in self.articles_array:
+                # print(article)
+                article_path = self.articles_folder + article
+                img1 = cv2.imread(article_path,cv2.IMREAD_GRAYSCALE) # queryImage
+                img1 = cv2.normalize(img1, None, 0, 255, cv2.NORM_MINMAX)
+                
+                keypoints1, descriptors1 = sift.detectAndCompute(img1, None)
 
-            FLAN_INDEX_KDTREE = 0
-            index_params = dict (algorithm = FLAN_INDEX_KDTREE, trees=5)
-            search_params = dict (checks=50)
+                FLAN_INDEX_KDTREE = 0
+                index_params = dict (algorithm = FLAN_INDEX_KDTREE, trees=5)
+                search_params = dict (checks=50)
+                
+                flann = cv2.FlannBasedMatcher(index_params, search_params)
+                matches = flann.knnMatch (descriptors1, descriptors2, k=2)
 
-            flann = cv2.FlannBasedMatcher(index_params, search_params)
-            matches = flann.knnMatch (descriptors1, descriptors2, k=2)
-
-            matchesMask = [[0,0] for i in range(len(matches))]
-            for i,(m1, m2) in enumerate (matches):
-                if m1.distance < 0.5 * m2.distance:
-                    matchesMask[i] = [1,0]
-            canvas = img2.copy()
-            # Sort by their distance.
-            matches = sorted(matches, key = lambda x:x[0].distance)
-            good = [m1 for (m1, m2) in matches if m1.distance < 0.7 * m2.distance]
-            # pts = []
-            if matchesMask.count([1,0]) > minimum_match:
-                # best_match = matchesMask.count([1,0])
-                article_match = str(article)
-                print(str(matchesMask.count([1,0])) + "or" + str(len(good))) 
-
-                src_pts = np.float32([ keypoints1[m.queryIdx].pt for m in good ]).reshape(-1,1,2)
-                dst_pts = np.float32([ keypoints2[m.trainIdx].pt for m in good ]).reshape(-1,1,2)
-                M, mask = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC,5.0)
-                if M is not None:
-                    h,w = img1.shape[:2]
-                    pts = np.float32([ [0,0],[0,h-1],[w-1,h-1],[w-1,0] ]).reshape(-1,1,2)
-                    dst = cv2.perspectiveTransform(pts,M)
-                    img3 = cv2.polylines(canvas,[np.int32(dst)],True,(0,255,0),3, cv2.LINE_AA)
+                matchesMask = [[0,0] for i in range(len(matches))]
+                for i,(m1, m2) in enumerate (matches):
+                    if m1.distance < 0.5 * m2.distance:
+                        matchesMask[i] = [1,0]
+                # Sort by their distance.
+                matches = sorted(matches, key = lambda x:x[0].distance)
+                good = [m1 for (m1, m2) in matches if m1.distance < 0.7 * m2.distance]
+                
+                # if matchesMask.count([1,0]) > minimum_match:
+                if len(good) > minimum_match:
+                    canvas = stream.copy()
+                    article_match = str(article)
                     
-                    draw_params = dict (matchColor = (0,0,255), singlePointColor = (0,255,0), matchesMask = matchesMask, flags=0 )
-                    flann_matches =cv2.drawMatchesKnn(img1, keypoints1, img3, keypoints2, matches, None,**draw_params)
-                    cv2.imshow('result',flann_matches)
-                    cv2.waitKey(30)
-                print(str(article_match) + ' number of matches: ' + str(matchesMask.count([1,0])), str(pts))
-
-
-    def image_callback_bbox(self, image):
-        # to use with segmentation (or incoming bounding boxes for each article on the tablet)
-        try: 
-            stream = bridge.imgmsg_to_cv2(image, 'bgr8')
-        except CvBridgeError as e:
-            print("CvBridge could not convert images from realsense to opencv")
-        if len(self.bbox_array): # and self.article_path != '':
-            for box in self.bbox_array:
-                # print(box)
-                img2 = stream[int(box.y1):int(box.y2),int(box.x1):int(box.x2)].copy()
-                # print(img2.shape)
-                img2 = cv2.resize(img2,(img2.shape[1],img2.shape[0]))
-                img2 = cv2.cvtColor(img2, cv2.COLOR_BGR2GRAY)
-
-                sift = cv2.xfeatures2d.SIFT_create()
-                keypoints2, descriptors2 = sift.detectAndCompute(img2, None)
-                best_match = 25
-                article_match = ''
-                for article in self.articles_array:
-                    article_path = self.articles_folder + article
-                    img1 = cv2.imread(article_path,cv2.IMREAD_GRAYSCALE) # queryImage
-                    img1 = cv2.normalize(img1, None, 0, 255, cv2.NORM_MINMAX)
-                    
-                    keypoints1, descriptors1 = sift.detectAndCompute(img1, None)
-
-                    FLAN_INDEX_KDTREE = 0
-                    index_params = dict (algorithm = FLAN_INDEX_KDTREE, trees=5)
-                    search_params = dict (checks=50)
-
-                    flann = cv2.FlannBasedMatcher(index_params, search_params)
-                    matches = flann.knnMatch (descriptors1, descriptors2, k=2)
-
-                    matchesMask = [[0,0] for i in range(len(matches))]
-                    for i,(m1, m2) in enumerate (matches):
-                        if m1.distance < 0.5 * m2.distance:
-                            matchesMask[i] = [1,0]
-                    canvas = img2.copy()
-                    # Sort by their distance.
-                    matches = sorted(matches, key = lambda x:x[0].distance)
-                    good = [m1 for (m1, m2) in matches if m1.distance < 0.7 * m2.distance]
-                    print(matchesMask.count([1,0]))
-                    if matchesMask.count([1,0]) > best_match:
-                        best_match = matchesMask.count([1,0])
-                        article_match = str(article)
-                        print(matchesMask.count([1,0]) + "or" + str(len(good))) 
-
-                        # src_pts = np.float32([ keypoints1[m.queryIdx].pt for m in good ]).reshape(-1,1,2)
-                        # dst_pts = np.float32([ keypoints2[m.trainIdx].pt for m in good ]).reshape(-1,1,2)
-                        # M, mask = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC,5.0)
-                        # if M is not None:
-                        #     h,w = img1.shape[:2]
-                        #     pts = np.float32([ [0,0],[0,h-1],[w-1,h-1],[w-1,0] ]).reshape(-1,1,2)
-                        #     dst = cv2.perspectiveTransform(pts,M)
-                        #     img3 = cv2.polylines(canvas,[np.int32(dst)],True,(0,255,0),3, cv2.LINE_AA)
-                            
+                    src_pts = np.float32([ keypoints1[m.queryIdx].pt for m in good ]).reshape(-1,1,2)
+                    dst_pts = np.float32([ keypoints2[m.trainIdx].pt for m in good ]).reshape(-1,1,2)
+                    dst_pts[:,0,0] += section[0]
+                    M, mask = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC,5.0)
+                    if M is not None:
+                        h,w = img1.shape[:2]
+                        pts = np.float32([ [0,0],[0,h-1],[w-1,h-1],[w-1,0] ]).reshape(-1,1,2)
+                        dst = cv2.perspectiveTransform(pts,M)
+                        img3 = cv2.polylines(canvas,[np.int32(dst)],True,(0,255,0),3, cv2.LINE_AA)
+                        
                         draw_params = dict (matchColor = (0,0,255), singlePointColor = (0,255,0), matchesMask = matchesMask, flags=0 )
-                        flann_matches =cv2.drawMatchesKnn(img1, keypoints1, img2, keypoints2, matches, None,**draw_params)
-                        cv2.imshow('result',flann_matches)
+                        # flann_matches =cv2.drawMatchesKnn(img1, keypoints1, img3, keypoints2, matches, None,**draw_params)
+                        cv2.imshow('result',img3)
                         cv2.waitKey(30)
-                        print(article_match + ' number of matches: ' + str(best_match))
+                        print(str(article_match) + ' number of matches: ' + str(matchesMask.count([1,0])) + ' / ' + str(len(good)))
+                        new_item = item()
+                        new_item.confidence = len(good)
+                        new_item.name = str(article)
+                        new_item.box_2d.x1 = dst[0,0,0]
+                        new_item.box_2d.y1 = dst[0,0,1]
+                        new_item.box_2d.x2 = dst[2,0,0]
+                        new_item.box_2d.y2 = dst[2,0,1]
+                        self.item_pub.publish(new_item)
 
-    def bbox_callback(self, bbox):
-        bbox_array = bbox.boxes
-        for box in bbox_array:
-            box.x1 = np.max((box.x1, 1))
-            box.x2 = np.max((box.x2, 1))
-        self.bbox_array = bbox_array
-        # print(self.bbox_array)
-        
 
     def shutdown(self):
         plt.close()
 
     def listener(self):
         rospy.init_node('detection_node')
-        # global self.article_path
         rospy.Subscriber('find_item', String, self.item_callback)
         rospy.Subscriber('/camera/color/image_raw', Image, self.image_callback_matching)
-        # rospy.Subscriber('/camera/color/image_raw', Image, self.image_callback_bbox)
-        # rospy.Subscriber('classification_bounding_boxes', BBox2d_array, self.bbox_callback)
-
+        self.item_pub = rospy.Publisher('/new_item', item, queue_size=5)
         rospy.spin() 
         rospy.on_shutdown(self.shutdown)
 

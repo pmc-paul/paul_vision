@@ -7,7 +7,7 @@ from geometry_msgs.msg import Pose, PointStamped
 from cv_bridge import CvBridge, CvBridgeError
 from sensor_msgs.msg import CameraInfo, Image
 from realsense2_camera.msg import Extrinsics
-from paul_vision.msg import BBox2d, BBox2d_array, BBox3d, BBox3d_array, article, classified_items
+from paul_vision.msg import BBox2d, BBox2d_array, BBox3d, BBox3d_array, item, classified_items
 import pyrealsense2 as rs2
 import cv2
 
@@ -125,15 +125,45 @@ class two_step_classification:
 #  mode sans segmentation
 class one_step_classification:
 
-    # callback pour chaque match + 25 points
+    # callback pour chaque match + 35 points
     # comparaison iou pour bounding box
     # assignement d'un id si nouvelle boite
     # comparaison confidence si pas nouveau
     # changement nom et confidence si nouveau match meilleur
 
+    def __init__(self):
+        rospy.Subscriber('/new_item', item, self.new_item_callback)
+        self.id = 0
+        self.classified_items = classified_items()
 
 
-    def get_iou(bb1, bb2):
+    def new_item_callback(self, new_item):
+        print('new item!')
+        if len(self.classified_items.items)>0:
+            match = None
+            for article in self.classified_items.items:
+                iou = self.get_iou(new_item.box_2d, article.box_2d)
+                # print(str(iou) +' ' + article.name + new_item.name)
+                if iou > 0.70:
+                    match = article.item_id
+                    if new_item.confidence > article.confidence:
+                        article.name = new_item.name
+                        article.confidence = new_item.confidence
+                        article.box_2d = new_item.box_2d
+            if match is None:
+                # print('no match')
+                new_item.item_id = self.id
+                self.id += 1
+                self.classified_items.items.append(new_item)
+        else:
+            new_item.item_id = self.id
+            self.id += 1
+            self.classified_items.items.append(new_item)
+        print(self.classified_items)
+
+
+
+    def get_iou(self, bb1, bb2):
         """
         Calculate the Intersection over Union (IoU) of two bounding boxes.
 
@@ -153,16 +183,16 @@ class one_step_classification:
         float
             in [0, 1]
         """
-        # assert bb1['x1'] < bb1['x2']
-        # assert bb1['y1'] < bb1['y2']
-        # assert bb2['x1'] < bb2['x2']
-        # assert bb2['y1'] < bb2['y2']
+        # assert bb1.x1 < bb1.x2
+        # assert bb1.y1 < bb1.y2
+        # assert bb2.x1 < bb2.x2
+        # assert bb2.y1 < bb2.y2
 
         # determine the coordinates of the intersection rectangle
-        x_left = max(bb1['x1'], bb2['x1'])
-        y_top = max(bb1['y1'], bb2['y1'])
-        x_right = min(bb1['x2'], bb2['x2'])
-        y_bottom = min(bb1['y2'], bb2['y2'])
+        x_left = max(bb1.x1, bb2.x1)
+        y_top = max(bb1.y1, bb2.y1)
+        x_right = min(bb1.x2, bb2.x2)
+        y_bottom = min(bb1.y2, bb2.y2)
 
         if x_right < x_left or y_bottom < y_top:
             return 0.0
@@ -172,8 +202,8 @@ class one_step_classification:
         intersection_area = (x_right - x_left) * (y_bottom - y_top)
 
         # compute the area of both AABBs
-        bb1_area = (bb1['x2'] - bb1['x1']) * (bb1['y2'] - bb1['y1'])
-        bb2_area = (bb2['x2'] - bb2['x1']) * (bb2['y2'] - bb2['y1'])
+        bb1_area = (bb1.x2 - bb1.x1) * (bb1.y2 - bb1.y1)
+        bb2_area = (bb2.x2 - bb2.x1) * (bb2.y2 - bb2.y1)
 
         # compute the intersection over union by taking the intersection
         # area and dividing it by the sum of prediction + ground-truth
@@ -190,8 +220,8 @@ def main():
     # bbox_classification_topic = 
 
     
-    node = two_step_classification()
-    # node = one_step_classification()
+    # node = two_step_classification()
+    node = one_step_classification()
     rospy.spin()
 
 if __name__ == '__main__':
