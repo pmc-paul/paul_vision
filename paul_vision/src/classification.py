@@ -43,7 +43,7 @@ class find_item:
         
         sections = [[0,200], [110,310], [220,420], [330, 530], [440,640]]
 
-        minimum_match = 35
+        minimum_match = 30
         article_match = ''
         for section in sections:
             stream = camera_stream.copy()
@@ -91,21 +91,25 @@ class find_item:
                         h,w = img1.shape[:2]
                         pts = np.float32([ [0,0],[0,h-1],[w-1,h-1],[w-1,0] ]).reshape(-1,1,2)
                         dst = cv2.perspectiveTransform(pts,M)
-                        img3 = cv2.polylines(canvas,[np.int32(dst)],True,(0,255,0),3, cv2.LINE_AA)
-                        
-                        draw_params = dict (matchColor = (0,0,255), singlePointColor = (0,255,0), matchesMask = matchesMask, flags=0 )
+                        # img3 = cv2.polylines(canvas,[np.int32(dst)],True,(0,255,0),3, cv2.LINE_AA)
+                        # img3 = cv2.rectangle(canvas, (int(dst[0,0,0]),int(dst[0,0,1])),(int(dst[2,0,0]),dst[2,0,1]), (0,0,255),2)
+                        # print(dst[:,0])
+                        # draw_params = dict (matchColor = (0,0,255), singlePointColor = (0,255,0), matchesMask = matchesMask, flags=0 )
                         # flann_matches =cv2.drawMatchesKnn(img1, keypoints1, img3, keypoints2, matches, None,**draw_params)
-                        cv2.imshow('result',img3)
-                        cv2.waitKey(30)
-                        print(str(article_match) + ' number of matches: ' + str(matchesMask.count([1,0])) + ' / ' + str(len(good)))
+                        
+                        # print(str(article_match) + ' number of matches: ' + str(matchesMask.count([1,0])) + ' / ' + str(len(good)))
                         new_item = item()
                         new_item.confidence = len(good)
                         new_item.name = str(article)
-                        new_item.box_2d.x1 = dst[0,0,0]
-                        new_item.box_2d.y1 = dst[0,0,1]
-                        new_item.box_2d.x2 = dst[2,0,0]
-                        new_item.box_2d.y2 = dst[2,0,1]
+                        new_item.box_2d.x1 = max(min(dst[0,0,0], dst[1,0,0]),0)
+                        new_item.box_2d.y1 = max(min(dst[0,0,1], dst[3,0,1]),0)
+                        new_item.box_2d.x2 = max(dst[2,0,0], dst[3,0,0])
+                        new_item.box_2d.y2 = max(dst[2,0,1], dst[1,0,1])
+                        new_item.header = image.header
                         self.item_pub.publish(new_item)
+                        # img3 = cv2.rectangle(canvas, (int(new_item.box_2d.x1),int(new_item.box_2d.y1)),(int(new_item.box_2d.x2),int(new_item.box_2d.y2)), (0,255,0),2)
+                        # cv2.imshow(article,img3)
+                        # cv2.waitKey(30)
 
 
     def shutdown(self):

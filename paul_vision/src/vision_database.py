@@ -7,7 +7,8 @@ from geometry_msgs.msg import Pose, PointStamped
 from cv_bridge import CvBridge, CvBridgeError
 from sensor_msgs.msg import CameraInfo, Image
 from realsense2_camera.msg import Extrinsics
-from paul_vision.msg import BBox2d, BBox2d_array, BBox3d, BBox3d_array, item, classified_items
+from paul_vision.msg import *
+from paul_vision.srv import *
 import pyrealsense2 as rs2
 import cv2
 
@@ -133,8 +134,10 @@ class one_step_classification:
 
     def __init__(self):
         rospy.Subscriber('/new_item', item, self.new_item_callback)
+        self.classified_pub = rospy.Publisher('/classified_items', classified_items, queue_size=1)
         self.id = 0
         self.classified_items = classified_items()
+        self.point_pub = rospy.Publisher('/points_changed', PointStamped, queue_size=1)
 
 
     def new_item_callback(self, new_item):
@@ -159,7 +162,23 @@ class one_step_classification:
             new_item.item_id = self.id
             self.id += 1
             self.classified_items.items.append(new_item)
-        print(self.classified_items)
+        for article in self.classified_items.items:
+            # call service
+            # rospy.wait_for_service('change_2d_to_3d')
+            # try:
+            transform = rospy.ServiceProxy('change_2d_to_3d', change_2d_to_3d)
+            article.box_3d = transform(article.box_2d).box_3d
+            # except rospy.ServiceException as e:
+            #     print("Service call failed: %s"%e)
+        point_pub = PointStamped()
+        point_pub.header = self.classified_items.items[0].header
+        point_pub.point.x = self.classified_items.items[0].box_3d.x2
+        point_pub.point.y = self.classified_items.items[0].box_3d.y2
+        point_pub.point.z = self.classified_items.items[0].box_3d.depth
+
+        
+        self.point_pub.publish(point_pub)
+        self.classified_pub.publish(self.classified_items)
 
 
 
