@@ -43,7 +43,7 @@ class find_item:
         
         sections = [[0,200], [110,310], [220,420], [330, 530], [440,640]]
 
-        minimum_match = 30
+        minimum_match = 40
         article_match = ''
         for section in sections:
             stream = camera_stream.copy()
@@ -101,15 +101,15 @@ class find_item:
                         new_item = item()
                         new_item.confidence = len(good)
                         new_item.name = str(article)
-                        new_item.box_2d.x1 = max(min(dst[0,0,0], dst[1,0,0]),0)
-                        new_item.box_2d.y1 = max(min(dst[0,0,1], dst[3,0,1]),0)
-                        new_item.box_2d.x2 = max(dst[2,0,0], dst[3,0,0])
-                        new_item.box_2d.y2 = max(dst[2,0,1], dst[1,0,1])
+                        new_item.box_2d.x1 = dst[1,0,0]
+                        new_item.box_2d.y1 = dst[3,0,1]
+                        new_item.box_2d.x2 = dst[3,0,0]
+                        new_item.box_2d.y2 = dst[1,0,1]
                         new_item.header = image.header
                         self.item_pub.publish(new_item)
-                        # img3 = cv2.rectangle(canvas, (int(new_item.box_2d.x1),int(new_item.box_2d.y1)),(int(new_item.box_2d.x2),int(new_item.box_2d.y2)), (0,255,0),2)
-                        # cv2.imshow(article,img3)
-                        # cv2.waitKey(30)
+                        img3 = cv2.rectangle(canvas, (int(new_item.box_2d.x1),int(new_item.box_2d.y1)),(int(new_item.box_2d.x2),int(new_item.box_2d.y2)), (0,255,0),2)
+                        cv2.imshow(article,img3)
+                        cv2.waitKey(30)
 
 
     def shutdown(self):

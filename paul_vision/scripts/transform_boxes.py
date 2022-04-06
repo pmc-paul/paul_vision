@@ -18,16 +18,17 @@ class transform:
         if self.intrinsics is not None and self.cv_image is not None:
             center = [box.y1 + (box.y2-box.y1)/2, box.x1 + (box.x2-box.x1)/2]
             image_copy = self.cv_image.copy()
-            result = rs2.rs2_deproject_pixel_to_point(self.intrinsics, [center[0], center[1]], image_copy[int(center[0]), int(center[1])])
+            result = rs2.rs2_deproject_pixel_to_point(self.intrinsics, [center[1], center[0]], image_copy[int(center[0]), int(center[1])])
             bounding_box_3d.depth = result[2] / 1000
 
-            result = rs2.rs2_deproject_pixel_to_point(self.intrinsics, [box.y1, box.x1], image_copy[int(center[0]), int(center[1])])
+            result = rs2.rs2_deproject_pixel_to_point(self.intrinsics, [box.x1, box.y1], image_copy[int(center[0]), int(center[1])])
             bounding_box_3d.y1 = result[1] / 1000
             bounding_box_3d.x1 = result[0] / 1000
 
-            result = rs2.rs2_deproject_pixel_to_point(self.intrinsics, [box.y2, box.x2], image_copy[int(center[0]), int(center[1])])
+            result = rs2.rs2_deproject_pixel_to_point(self.intrinsics, [box.x2, box.y2], image_copy[int(center[0]), int(center[1])])
             bounding_box_3d.y2 = result[1] / 1000
             bounding_box_3d.x2 = result[0] / 1000
+
         return change_2d_to_3dResponse(bounding_box_3d)
 
 

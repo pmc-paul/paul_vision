@@ -135,50 +135,60 @@ class one_step_classification:
     def __init__(self):
         rospy.Subscriber('/new_item', item, self.new_item_callback)
         self.classified_pub = rospy.Publisher('/classified_items', classified_items, queue_size=1)
+        self.classified_pub = rospy.Publisher('/classified_items', classified_items, queue_size=1)
         self.id = 0
         self.classified_items = classified_items()
-        self.point_pub = rospy.Publisher('/points_changed', PointStamped, queue_size=1)
+        self.point_pub1 = rospy.Publisher('/points_changed1', PointStamped, queue_size=1)
+        self.point_pub2 = rospy.Publisher('/points_changed2', PointStamped, queue_size=1)
 
 
     def new_item_callback(self, new_item):
-        print('new item!')
-        if len(self.classified_items.items)>0:
-            match = None
-            for article in self.classified_items.items:
-                iou = self.get_iou(new_item.box_2d, article.box_2d)
-                # print(str(iou) +' ' + article.name + new_item.name)
-                if iou > 0.70:
-                    match = article.item_id
-                    if new_item.confidence > article.confidence:
-                        article.name = new_item.name
-                        article.confidence = new_item.confidence
-                        article.box_2d = new_item.box_2d
-            if match is None:
-                # print('no match')
+        # print('new item!')
+        if len(self.classified_items.items)<4:
+            if len(self.classified_items.items)>0:
+                match = None
+                for article in self.classified_items.items:
+                    iou = self.get_iou(new_item.box_2d, article.box_2d)
+                    # print(str(iou) +' ' + article.name + new_item.name)
+                    if iou > 0.70:
+                        match = article.item_id
+                        if new_item.confidence > article.confidence:
+                            article.name = new_item.name
+                            article.confidence = new_item.confidence
+                            article.box_2d = new_item.box_2d
+                if match is None:
+                    # print('no match')
+                    new_item.item_id = self.id
+                    self.id += 1
+                    self.classified_items.items.append(new_item)
+            else:
                 new_item.item_id = self.id
                 self.id += 1
                 self.classified_items.items.append(new_item)
-        else:
-            new_item.item_id = self.id
-            self.id += 1
-            self.classified_items.items.append(new_item)
-        for article in self.classified_items.items:
-            # call service
-            # rospy.wait_for_service('change_2d_to_3d')
-            # try:
-            transform = rospy.ServiceProxy('change_2d_to_3d', change_2d_to_3d)
-            article.box_3d = transform(article.box_2d).box_3d
-            # except rospy.ServiceException as e:
-            #     print("Service call failed: %s"%e)
+            for article in self.classified_items.items:
+                # call service
+                # rospy.wait_for_service('change_2d_to_3d')
+                # try:
+                transform = rospy.ServiceProxy('change_2d_to_3d', change_2d_to_3d)
+                article.box_3d = transform(article.box_2d).box_3d
+                # except rospy.ServiceException as e:
+                #     print("Service call failed: %s"%e)
+        # if len(self.classified_items.items) > 2:
         point_pub = PointStamped()
-        point_pub.header = self.classified_items.items[0].header
-        point_pub.point.x = self.classified_items.items[0].box_3d.x2
-        point_pub.point.y = self.classified_items.items[0].box_3d.y2
-        point_pub.point.z = self.classified_items.items[0].box_3d.depth
-
-        
-        self.point_pub.publish(point_pub)
+        article_to_grab = self.classified_items.items[0]
+        # center_x = article_to_grab.box_3d.x1 + (article_to_grab.box_3d.x2 - article_to_grab.box_3d.x1)/2
+        # center_y = article_to_grab.box_3d.y1 + (article_to_grab.box_3d.y2 - article_to_grab.box_3d.y1)/2
+        point_pub.header = article_to_grab.header
+        point_pub.point.x = article_to_grab.box_3d.x1 
+        point_pub.point.y = article_to_grab.box_3d.y1
+        point_pub.point.z = article_to_grab.box_3d.depth
+        self.point_pub1.publish(point_pub)
         self.classified_pub.publish(self.classified_items)
+        point_pub.header = article_to_grab.header
+        point_pub.point.x = article_to_grab.box_3d.x2 
+        point_pub.point.y = article_to_grab.box_3d.y2
+        point_pub.point.z = article_to_grab.box_3d.depth
+        self.point_pub2.publish(point_pub)
 
 
 
@@ -233,13 +243,6 @@ class one_step_classification:
         return iou
 
 def main():
-    depth_image_topic = '/camera/aligned_depth_to_color/image_raw'
-    depth_info_topic = '/camera/aligned_depth_to_color/camera_info'
-    bbox_3d_topic = '/bounding_boxes_3d'
-    # bbox_classification_topic = 
-
-    
-    # node = two_step_classification()
     node = one_step_classification()
     rospy.spin()
 
