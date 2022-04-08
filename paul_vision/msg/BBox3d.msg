@@ -5,5 +5,7 @@ float64 y1
 float64 x2
 float64 y2
 
+float64 centerx
+float64 centery
 float64 depth
 

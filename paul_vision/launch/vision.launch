@@ -5,14 +5,19 @@
     <arg name="rviz_config_file"    default="rviz_cfg.rviz"/>
     <arg name="rviz_cfg"            default="-d $(find paul_vision)/config/$(arg rviz_config_file)"/>
 
-    <!-- Launch camera
+    <!-- Launch camera -->
     <include file="$(find realsense2_camera)/launch/rs_camera.launch">    
         <arg name="filters" value="pointcloud"/>
-    </include> -->
+        <arg name="align_depth" value="True"/>
+    </include>
 
     <!-- Launch RVIZ -->
     <!-- <node if="$(arg rviz)" name="rviz" pkg="rviz" type="rviz" args="$(arg rviz_cfg)"/> -->
 
-    <!-- Launch vision node -->
-    <node name="vision" pkg="paul_vision" type="paul_vision_node" output="screen"/>
+    <!-- Launch vision nodes -->
+    <node name="classification" pkg="paul_vision" type="classification.py" output="screen"/>
+    <node name="transform_boxes" pkg="paul_vision" type="transform_boxes.py" output="screen"/>
+    <node name="vision_database" pkg="paul_vision" type="vision_database.py" output="screen"/>
+    <node name="visualisation" pkg="paul_vision" type="visualisation.py" output="screen"/>
+
 </launch>

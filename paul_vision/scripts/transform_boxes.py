@@ -19,6 +19,8 @@ class transform:
             center = [box.y1 + (box.y2-box.y1)/2, box.x1 + (box.x2-box.x1)/2]
             image_copy = self.cv_image.copy()
             result = rs2.rs2_deproject_pixel_to_point(self.intrinsics, [center[1], center[0]], image_copy[int(center[0]), int(center[1])])
+            bounding_box_3d.centery = result[1] / 1000
+            bounding_box_3d.centerx = result[0] / 1000
             bounding_box_3d.depth = result[2] / 1000
 
             result = rs2.rs2_deproject_pixel_to_point(self.intrinsics, [box.x1, box.y1], image_copy[int(center[0]), int(center[1])])

@@ -16,26 +16,33 @@ class vizualisation:
         rospy.Subscriber('/camera/color/image_raw', Image, self.image_callback)
         rospy.Subscriber('/classified_items', classified_items, self.items_callback)
         self.pub_image = rospy.Publisher('/classified_image', Image, queue_size=2)
-        self.bounding_boxes = None
+        # self.items_list = None
+        self.image = None
 
     def image_callback(self, camera_stream):
          # to use without the segmentation pre-process
         try: 
-            image = bridge.imgmsg_to_cv2(camera_stream, 'bgr8')
+            self.image = bridge.imgmsg_to_cv2(camera_stream, 'bgr8')
         except CvBridgeError as e:
             print("CvBridge could not convert images from realsense to opencv")
-        if self.bounding_boxes is not None:
-            # print(self.bounding_boxes.boxes)
-            for bounding_box in self.bounding_boxes.boxes:
-                cv2.rectangle(image, (int(bounding_box.x1), int(bounding_box.y1)), (int(bounding_box.x2), int(bounding_box.y2)), (0,0,255), 2)
-            image_pub = bridge.cv2_to_imgmsg(image)
-            self.pub_image.publish(image_pub)
 
 
     def items_callback(self, bbox_msg):
-        self.bounding_boxes = BBox2d_array()
-        for item in bbox_msg.items:
-            self.bounding_boxes.boxes.append(item.box_2d)
+        self.items_list = BBox2d_array()
+        if self.image is not None:
+            image_copy = self.image.copy()
+            for item in bbox_msg.items:
+                # self.items_list.boxes.append(item)
+                bounding_box = item.box_2d
+                color = (0,0,255)
+                if item.name == 'champ_leger.png':
+                    color = (255,0,50)
+                if item.name == 'champ_sans_sel.png':
+                    color = (255,255,0)
+                cv2.putText(image_copy, item.name, (int(bounding_box.x1), int(bounding_box.y1)-10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
+                cv2.rectangle(image_copy, (int(bounding_box.x1), int(bounding_box.y1)), (int(bounding_box.x2), int(bounding_box.y2)), color, 2)
+                image_pub = bridge.cv2_to_imgmsg(image_copy)
+                self.pub_image.publish(image_pub)
 
 def main():
     node = vizualisation()
