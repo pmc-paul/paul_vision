@@ -7,6 +7,7 @@ from geometry_msgs.msg import Pose, PoseArray, PointStamped
 from cv_bridge import CvBridge, CvBridgeError
 from sensor_msgs.msg import CameraInfo, Image
 from realsense2_camera.msg import Extrinsics
+from paul_vision.msg import BBox2d, BBox2d_array, item, classified_items
 from paul_vision.msg import *
 from paul_vision.srv import *
 import pyrealsense2 as rs2
@@ -122,13 +123,10 @@ class one_step_classification:
         # self.classified_pub = rospy.Publisher('/classified_items', classified_items, queue_size=1)
         self.id = 0
         self.classified_items = classified_items()
-        self.arm_pub = rospy.Publisher('/arm_position_request', Pose, queue_size=1)
-        self.pose_pub = rospy.Publisher('/pose_array', PoseArray, queue_size=1)
         self.request_sent = False
 
 
     def new_item_callback(self, new_item):
-        # print('new item!')
         if len(self.classified_items.items)>0:
             match = None
             for article in self.classified_items.items:
@@ -157,27 +155,18 @@ class one_step_classification:
                 article.box_3d = transform(article.box_2d).box_3d
             except rospy.ServiceException as e:
                 print("Service call failed: %s"%e)
-        if len(self.classified_items.items) > 0: # and not self.request_sent:
+        if len(self.classified_items.items) > 0:
             self.classified_pub.publish(self.classified_items)
+
             # point_pub = PoseArray()
             # for articles in self.classified_items.items:
-            article_to_grab = self.classified_items.items[0]
+            # article_to_grab = self.classified_items.items[0]
             # orientation camera (z,-x, -y) = orientation bras (x,y,z)
-            point_pub = Pose()
-            point_pub.position.x = article_to_grab.box_3d.depth - 0.05
-            point_pub.position.y = -article_to_grab.box_3d.centerx + 0.04
-            point_pub.position.z = -article_to_grab.box_3d.centery + 0.0625
-            self.arm_pub.publish(point_pub)
-            # self.request_sent = True
-                # to publish point stamped in rviz
-                # pose = Pose()
-                # pose.position.x = articles.box_3d.centerx
-                # pose.position.y = articles.box_3d.centery
-                # pose.position.z = articles.box_3d.depth
-                # point_pub.poses.append(pose)
-            # print(point_pub)
-            # point_pub.header = self.classified_items.items[0].header
-            # self.pose_pub.publish(point_pub)
+            # point_pub = Pose()
+            # point_pub.position.x = article_to_grab.box_3d.depth - 0.05
+            # point_pub.position.y = -article_to_grab.box_3d.centerx + 0.04
+            # point_pub.position.z = -article_to_grab.box_3d.centery + 0.0625
+            # self.arm_pub.publish(point_pub)
 
 
     def get_iou(self, bb1, bb2):

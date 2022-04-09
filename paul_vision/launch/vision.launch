@@ -19,5 +19,7 @@
     <node name="transform_boxes" pkg="paul_vision" type="transform_boxes.py" output="screen"/>
     <node name="vision_database" pkg="paul_vision" type="vision_database.py" output="screen"/>
     <node name="visualisation" pkg="paul_vision" type="visualisation.py" output="screen"/>
+    <node name="master" pkg="paul_vision" type="master.py" output="screen"/>
+
 
 </launch>
