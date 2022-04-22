@@ -117,7 +117,7 @@ class find_item:
                                 cv2.imshow("results",img3)
                                 cv2.waitKey(10)
                 self.iterations += 1
-                if self.iterations > 1:
+                if self.iterations > 2:
                     self.finished_pub.publish(True)
                 else:
                     self.finished_pub.publish(False)

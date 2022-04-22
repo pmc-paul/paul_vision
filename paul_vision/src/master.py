@@ -29,6 +29,7 @@ class master_vision:
             for article in self.items_list.items:
                 if article.name == self.item_wanted:
                     print('found')
+                    # orientation camera (z,-x, -y) = orientation bras (x,y,z)
                     pose_pub = Pose()
                     pose_pub.position.x = article.box_3d.depth - 0.05
                     pose_pub.position.y = -article.box_3d.centerx + 0.02

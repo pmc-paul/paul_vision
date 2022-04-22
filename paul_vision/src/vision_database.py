@@ -120,7 +120,7 @@ class one_step_classification:
     def __init__(self):
         rospy.Subscriber('/new_item', item, self.new_item_callback)
         self.classified_pub = rospy.Publisher('/classified_items', classified_items, queue_size=1)
-        # self.classified_pub = rospy.Publisher('/classified_items', classified_items, queue_size=1)
+        self.pose_array_pub = rospy.Publisher('/pose_array', PoseArray, queue_size=1)
         self.id = 0
         self.classified_items = classified_items()
         self.request_sent = False
@@ -157,16 +157,15 @@ class one_step_classification:
                 print("Service call failed: %s"%e)
         if len(self.classified_items.items) > 0:
             self.classified_pub.publish(self.classified_items)
-
             # point_pub = PoseArray()
             # for articles in self.classified_items.items:
-            # article_to_grab = self.classified_items.items[0]
-            # orientation camera (z,-x, -y) = orientation bras (x,y,z)
-            # point_pub = Pose()
-            # point_pub.position.x = article_to_grab.box_3d.depth - 0.05
-            # point_pub.position.y = -article_to_grab.box_3d.centerx + 0.04
-            # point_pub.position.z = -article_to_grab.box_3d.centery + 0.0625
-            # self.arm_pub.publish(point_pub)
+            #     points = Pose()
+            #     points.position.x = articles.box_3d.centerx
+            #     points.position.y = articles.box_3d.centery
+            #     points.position.z = articles.box_3d.depth 
+            #     point_pub.poses.append(points)
+            #     point_pub.header = articles.header
+            # self.pose_array_pub.publish(point_pub)
 
 
     def get_iou(self, bb1, bb2):
