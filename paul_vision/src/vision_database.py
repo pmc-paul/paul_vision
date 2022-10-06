@@ -130,6 +130,7 @@ class one_step_classification:
         if len(self.classified_items.items)>0:
             match = None
             for article in self.classified_items.items:
+                # changer nms pour traiter boite par ordre de confiance
                 iou = self.get_iou(new_item.box_2d, article.box_2d)
                 # print(str(iou) +' ' + article.name + new_item.name)
                 if iou > 0.50:

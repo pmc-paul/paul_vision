@@ -21,16 +21,21 @@ class find_item:
         self.articles_array = []
         self.iterations = 0
         self.camera_stream = None
-        for images in os.listdir(self.articles_folder):
-            if (images.endswith(".png")):
-                # image_path = self.articles_folder + images
-                self.articles_array.append(images)
 
     def item_callback(self, name):
         #find unique article
         cwd = rospkg.RosPack().get_path('paul_vision')
         self.article_path = cwd + '/articles/' + name.data + '.png'
         print(self.article_path)
+
+        # ajouter service avec database pour avoir autres informations
+        # height, width
+        # ajouter images sur le même étage seulement
+        self.articles_array = []
+        for images in os.listdir(self.articles_folder):
+            if (images.endswith(".png")):
+                # image_path = self.articles_folder + images
+                self.articles_array.append(images)
 
     def image_callback_matching(self, image):
         # to use without the segmentation pre-process
@@ -44,7 +49,9 @@ class find_item:
     def processing_callback(self, msg):
         # print('here')
         if msg.data:
+            # decision arbitraire à revoir
             sections = [[0,200], [110,310], [220,420], [330, 530], [440,640]]
+            # decision arbitraire à revoir
             minimum_match = 40
             article_match = ''
             if self.camera_stream is not None:
@@ -57,6 +64,7 @@ class find_item:
                     sift = cv2.xfeatures2d.SIFT_create()
                     keypoints2, descriptors2 = sift.detectAndCompute(img2, None)
                     # print('************************')
+                    # iteration de tous les articles (ajouter étage par étage)
                     for article in self.articles_array:
                         # print(article)
                         article_path = self.articles_folder + article
@@ -112,6 +120,7 @@ class find_item:
                                 img3 = cv2.rectangle(stream, (int(new_item.box_2d.x1),int(new_item.box_2d.y1)),(int(new_item.box_2d.x2),int(new_item.box_2d.y2)), (0,255,0),2)
                                 cv2.imshow("results",img3)
                                 cv2.waitKey(10)
+                # reset somewhere??
                 self.iterations += 1
                 if self.iterations > 2:
                     self.finished_pub.publish(True)
@@ -126,9 +135,11 @@ class find_item:
         rospy.init_node('detection_node')
         rospy.Subscriber('find_item', String, self.item_callback)
         rospy.Subscriber('/camera/color/image_raw', Image, self.image_callback_matching)
+        rospy.Subscriber('/classification_search', Bool, self.processing_callback)
+
         self.item_pub = rospy.Publisher('/new_item', item, queue_size=5)
         self.finished_pub = rospy.Publisher('/classification_finished', Bool, queue_size=5)
-        rospy.Subscriber('/classification_search', Bool, self.processing_callback)
+
         rospy.spin() 
         rospy.on_shutdown(self.shutdown)
 
