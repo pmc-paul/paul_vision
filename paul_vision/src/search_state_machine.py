@@ -4,6 +4,7 @@ import rospy
 import smach
 import smach_ros
 import numpy as np
+from database.srv import *
 
 # STATES
 # start
@@ -18,19 +19,28 @@ class start(smach.State):
     def __init__(self):
         smach.State.__init__(self, outcomes=['logic_dispatch'])
 
-    def execute(self, ud):
+    def execute(self, userdata):
         return 'logic_dispatch'
 
 class logic_dispatch(smach.State):
     def __init__(self):
-        smach.State.__init__(self, outcomes=['moveArm','moveElevation','End','FeatureMatching'])
+        smach.State.__init__(self, outcomes=['moveArm','moveElevation','End','FeatureMatching'], input_keys=['articleId'])
         self.counter = 0
         self.elevation_count = 0
-        self.etagere_state = np.zeros(3,3)
+        self.etagere_state = np.zeros((3,3))
         self.currentLevel = 0
+        self.articleLevel = database_client(userdata.articleId)
 
+    def database_client(articleId):
+        rospy.wait_for_service('sqlRequest')
+        try:
+            db_request = rospy.ServiceProxy('sqlRequest', itemDetails)
+            resp1 = db_request(articleId)
+            return resp1.level
+        except rospy.ServiceException as e:
+            print("Service call failed: %s"%e)
 
-    def execute(self, ud):
+    def execute(self, userdata):
         rospy.sleep(1)
         # check level with elevateur
         self.counter += 1
@@ -48,14 +58,14 @@ class moveArm(smach.State):
         smach.State.__init__(self, outcomes=['logic_dispatch'])
         self.counter = 0
 
-    def execute(self, ud):
+    def execute(self, userdata):
         return 'logic_dispatch'
 
 class moveElevation(smach.State):
     def __init__(self):
         smach.State.__init__(self, outcomes=['logic_dispatch'])
 
-    def execute(self, ud):
+    def execute(self, userdata):
         return 'logic_dispatch'
 
 # define state Bar
@@ -63,7 +73,7 @@ class matching(smach.State):
     def __init__(self):
         smach.State.__init__(self, outcomes=['notFound','grab'])
 
-    def execute(self, ud):
+    def execute(self, userdata):
         rospy.loginfo('Executing state matching')
         rospy.sleep(5)
         return 'notFound'
@@ -72,7 +82,7 @@ class notFound(smach.State):
     def __init__(self):
         smach.State.__init__(self, outcomes=['logic_dispatch'])
 
-    def execute(self, ud):
+    def execute(self, userdata):
         rospy.loginfo('Object not found here')
         rospy.sleep(2)
         return 'logic_dispatch'
@@ -81,7 +91,7 @@ class Grab(smach.State):
     def __init__(self):
         smach.State.__init__(self, outcomes=['End'])
 
-    def execute(self, ud):
+    def execute(self, userdata):
         rospy.loginfo('Executing state Grab')
         rospy.sleep(5)
         return 'End'
@@ -90,16 +100,16 @@ class End(smach.State):
     def __init__(self):
         smach.State.__init__(self, outcomes=['objectFound','objectNotFound'])
     
-    def execute(self, ud):
-        return 'start'
+    def execute(self, userdata):
+        return 'objectFound'
 
 # main
 def main():
     rospy.init_node('smach_vision')
-
+    article = rospy.get_param('~article')
     # Create a SMACH state machine
     sm = smach.StateMachine(outcomes=[ 'ObjectFound', 'ObjectNotFound'])
-
+    sm.userdata.articleId = article
     # Open the container
     with sm:
         # Add states to the container

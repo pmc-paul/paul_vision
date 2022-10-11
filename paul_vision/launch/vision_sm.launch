@@ -1,0 +1,11 @@
+<launch>
+
+    <arg name="article"                default="None"/>
+
+    <!-- Launch state machine nodes -->
+    <node name="search_state_machine" pkg="paul_vision" type="search_state_machine.py" output="screen">
+        <param name="article" value="$(arg article)"/>
+    </node>
+
+
+</launch>
