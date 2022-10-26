@@ -43,7 +43,7 @@ class transform:
         except ValueError as e:
             print(e)
             return
-
+    # d435 intrinsics?????
     def imageDepthInfoCallback(self, cameraInfo):
         try:
             if self.intrinsics:

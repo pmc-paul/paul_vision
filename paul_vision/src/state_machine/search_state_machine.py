@@ -24,34 +24,52 @@ class start(smach.State):
 
 class logic_dispatch(smach.State):
     def __init__(self):
-        smach.State.__init__(self, outcomes=['moveArm','moveElevation','End','FeatureMatching'], input_keys=['articleId'])
-        self.counter = 0
+        smach.State.__init__(self, outcomes=['moveArm','moveElevation','objectNotFound','FeatureMatching'], input_keys=['articleId'])
         self.elevation_count = 0
         self.etagere_state = np.zeros((3,3))
-        self.currentLevel = 0
-        self.articleLevel = database_client(userdata.articleId)
-
-    def database_client(articleId):
+        self.currentLevel = 0 # check level in execute with elevation service
         rospy.wait_for_service('sqlRequest')
         try:
             db_request = rospy.ServiceProxy('sqlRequest', itemDetails)
             resp1 = db_request(articleId)
-            return resp1.level
+            self.articleLevel =  resp1.level
+            print(self.articleLevel)
         except rospy.ServiceException as e:
             print("Service call failed: %s"%e)
 
     def execute(self, userdata):
-        rospy.sleep(1)
-        # check level with elevateur
-        self.counter += 1
-        if self.counter < 3:
-            rospy.sleep(2)
-            return 'moveArm'
-        elif self.elevation_count<1:
-            self.elevation_count +=1
-            return 'moveElevation'
+        # rospy.sleep(1)
+        goodLevel = False
+        # move elevateur first
+        if(np.any(self.etagere_state[self.articleLevel] == 0)):
+            # check level with elevateur
+            if self.currentLevel == self.articleLevel:
+                goodLevel = True
+            else:
+                goodLevel = False
+                return 'moveElevation'
+                #move elevateur service
+                # wait   
+        #else to search other level
         else:
+            for level in range(len(self.etagere_state[:0])):
+                if np.any(self.etagere_state[level] == 0) :
+                    # add user data
+                   return 'moveElevation' 
+        # move arm if necessary
+        counter = 0
+        pos_to_search = -1
+        for position in self.etagere_state[1]:
+            if position == 0:
+                pos_to_search = counter
+            counter += 1
+
+        # check arm position and move arm
+
+        if pos_to_search != -1:
             return 'FeatureMatching'
+        else:
+            return 'objectNotFound'
 
 class moveArm(smach.State):
     def __init__(self):
@@ -89,20 +107,12 @@ class notFound(smach.State):
         
 class Grab(smach.State):
     def __init__(self):
-        smach.State.__init__(self, outcomes=['End'])
+        smach.State.__init__(self, outcomes=['objectFound'])
 
     def execute(self, userdata):
         rospy.loginfo('Executing state Grab')
         rospy.sleep(5)
-        return 'End'
-
-class End(smach.State):
-    def __init__(self):
-        smach.State.__init__(self, outcomes=['objectFound','objectNotFound'])
-    
-    def execute(self, userdata):
         return 'objectFound'
-
 # main
 def main():
     rospy.init_node('smach_vision')
@@ -120,15 +130,13 @@ def main():
         smach.StateMachine.add('FeatureMatching', matching(), 
                                transitions={'notFound':'notFound', 'grab':'Grab'})
         smach.StateMachine.add('Grab', Grab(),  
-                                transitions={'End':'End'})
+                                transitions={'objectFound':'objectFound'})
         smach.StateMachine.add('notFound', notFound(),  
                                 transitions={'logic_dispatch':'logic_dispatch'})
         smach.StateMachine.add('MoveElevation', moveElevation(), 
                                transitions={'logic_dispatch':'logic_dispatch'})
-        smach.StateMachine.add('End', End(), 
-                               transitions={'objectFound':'ObjectFound','objectNotFound':'ObjectNotFound'})
         smach.StateMachine.add('logic_dispatch', logic_dispatch(),
-                                transitions={'moveArm':'MoveArm','moveElevation':'MoveElevation','End':'End','FeatureMatching':'FeatureMatching'})   
+                                transitions={'moveArm':'MoveArm','moveElevation':'MoveElevation','objectNotFound':'objectNotFound','FeatureMatching':'FeatureMatching'})   
 
     # introspection server for smach GUI
     sis = smach_ros.IntrospectionServer('server_vision', sm, '/SM_ROOT')

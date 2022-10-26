@@ -21,21 +21,25 @@ class find_item:
         self.articles_array = []
         self.iterations = 0
         self.camera_stream = None
-
-    def item_callback(self, name):
-        #find unique article
-        cwd = rospkg.RosPack().get_path('paul_vision')
-        self.article_path = cwd + '/articles/' + name.data + '.png'
-        print(self.article_path)
-
-        # ajouter service avec database pour avoir autres informations
-        # height, width
-        # ajouter images sur le même étage seulement
-        self.articles_array = []
         for images in os.listdir(self.articles_folder):
             if (images.endswith(".png")):
                 # image_path = self.articles_folder + images
                 self.articles_array.append(images)
+
+    # def item_callback(self, name):
+    #     #find unique article
+    #     cwd = rospkg.RosPack().get_path('paul_vision')
+    #     self.article_path = cwd + '/articles/' + name.data + '.png'
+    #     print(self.article_path)
+
+    #     # ajouter service avec database pour avoir autres informations
+    #     # height, width
+    #     # ajouter images sur le même étage seulement
+    #     self.articles_array = []
+    #     for images in os.listdir(self.articles_folder):
+    #         if (images.endswith(".png")):
+    #             # image_path = self.articles_folder + images
+    #             self.articles_array.append(images)
 
     def image_callback_matching(self, image):
         # to use without the segmentation pre-process
@@ -133,7 +137,7 @@ class find_item:
 
     def classification(self):
         rospy.init_node('detection_node')
-        rospy.Subscriber('find_item', String, self.item_callback)
+        # rospy.Subscriber('find_item', String, self.item_callback)
         rospy.Subscriber('/camera/color/image_raw', Image, self.image_callback_matching)
         rospy.Subscriber('/classification_search', Bool, self.processing_callback)
 
