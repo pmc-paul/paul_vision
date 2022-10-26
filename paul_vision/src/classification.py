@@ -138,7 +138,11 @@ class find_item:
     def classification(self):
         rospy.init_node('detection_node')
         # rospy.Subscriber('find_item', String, self.item_callback)
-        rospy.Subscriber('/camera/color/image_raw', Image, self.image_callback_matching)
+        # d435
+        #rospy.Subscriber('/camera/color/image_raw', Image, self.image_callback_matching)
+        # kinova
+        rospy.Subscriber('/my_gen3/vision_topic', Image, self.image_callback_matching)
+        
         rospy.Subscriber('/classification_search', Bool, self.processing_callback)
 
         self.item_pub = rospy.Publisher('/new_item', item, queue_size=5)
