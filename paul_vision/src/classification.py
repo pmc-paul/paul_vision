@@ -10,6 +10,7 @@ from sensor_msgs.msg import Image
 import os
 bridge = CvBridge()
 import rospkg
+from database.srv import *
 
 
 class find_item:
@@ -17,7 +18,7 @@ class find_item:
         self.article_path = ''
         self.bbox_array = []
         cwd = rospkg.RosPack().get_path('paul_vision')
-        self.articles_folder = cwd + '/cannes/'
+        self.articles_folder = cwd + '/articles/'
         self.articles_array = []
         self.iterations = 0
         self.camera_stream = None
@@ -25,6 +26,8 @@ class find_item:
             if (images.endswith(".png")):
                 # image_path = self.articles_folder + images
                 self.articles_array.append(images)
+        self.pixelRation = 35
+        self.pixelRange = self.pixelRation * 2.15
 
     # def item_callback(self, name):
     #     #find unique article
@@ -51,10 +54,10 @@ class find_item:
         
     
     def processing_callback(self, msg):
-        # print('here')
+        # print('request callback in classification')
         if msg.data:
             # decision arbitraire à revoir
-            sections = [[0,200], [110,310], [220,420], [330, 530], [440,640]]
+            sections = [[0,640], [240,900], [640,1280]]
             # decision arbitraire à revoir
             minimum_match = 40
             article_match = ''
@@ -65,7 +68,7 @@ class find_item:
                     img2 = cv2.resize(img2,(img2.shape[1],img2.shape[0]))
                     img2 = cv2.cvtColor(img2, cv2.COLOR_BGR2GRAY)
 
-                    sift = cv2.xfeatures2d.SIFT_create()
+                    sift = cv2.SIFT_create()
                     keypoints2, descriptors2 = sift.detectAndCompute(img2, None)
                     # print('************************')
                     # iteration de tous les articles (ajouter étage par étage)
@@ -105,26 +108,42 @@ class find_item:
                                 h,w = img1.shape[:2]
                                 pts = np.float32([ [0,0],[0,h-1],[w-1,h-1],[w-1,0] ]).reshape(-1,1,2)
                                 dst = cv2.perspectiveTransform(pts,M)
-                                # img3 = cv2.polylines(canvas,[np.int32(dst)],True,(0,255,0),3, cv2.LINE_AA)
-                                # img3 = cv2.rectangle(canvas, (int(dst[0,0,0]),int(dst[0,0,1])),(int(dst[2,0,0]),dst[2,0,1]), (0,0,255),2)
-                                # print(dst[:,0])
-                                # draw_params = dict (matchColor = (0,0,255), singlePointColor = (0,255,0), matchesMask = matchesMask, flags=0 )
-                                # flann_matches =cv2.drawMatchesKnn(img1, keypoints1, img3, keypoints2, matches, None,**draw_params)
-                                
-                                # print(str(article_match) + ' number of matches: ' + str(matchesMask.count([1,0])) + ' / ' + str(len(good)))
-                                new_item = item()
-                                new_item.confidence = len(good)
-                                new_item.name = str(article)
-                                new_item.box_2d.x1 = dst[1,0,0]
-                                new_item.box_2d.y1 = dst[3,0,1]
-                                new_item.box_2d.x2 = dst[3,0,0]
-                                new_item.box_2d.y2 = dst[1,0,1]
-                                new_item.header = self.header
-                                self.item_pub.publish(new_item)
-                                img3 = cv2.rectangle(stream, (int(new_item.box_2d.x1),int(new_item.box_2d.y1)),(int(new_item.box_2d.x2),int(new_item.box_2d.y2)), (0,255,0),2)
-                                cv2.imshow("results",img3)
-                                cv2.waitKey(10)
-                # reset somewhere??
+                                # check size of articles on row
+                                pix_width  = (dst[3,0,0] - dst[1,0,0])
+                                pix_height = (dst[1,0,1] - dst[3,0,1])
+                                rospy.wait_for_service('sqlRequestName')
+                                try:
+                                    db_request = rospy.ServiceProxy('sqlRequestName', itemDetailsName)
+                                    resp1 = db_request(str(article))
+                                    real_width =  resp1.width
+                                    real_height = resp1.height
+                                except rospy.ServiceException as e:
+                                    print("Service call failed: %s"%e)
+                                if (pix_height <= ((real_height * self.pixelRation) + self.pixelRange ) and pix_height >= ((real_height * self.pixelRation) - self.pixelRange )) and (pix_width <= ((real_width * self.pixelRation) + self.pixelRange ) and pix_width >= ((real_width * self.pixelRation) - self.pixelRange )):
+                                    
+                                    # img3 = cv2.polylines(canvas,[np.int32(dst)],True,(0,255,0),3, cv2.LINE_AA)
+                                    # img3 = cv2.rectangle(canvas, (int(dst[0,0,0]),int(dst[0,0,1])),(int(dst[2,0,0]),dst[2,0,1]), (0,0,255),2)
+                                    # print(dst[:,0])
+                                    # draw_params = dict (matchColor = (0,0,255), singlePointColor = (0,255,0), matchesMask = matchesMask, flags=0 )
+                                    # flann_matches =cv2.drawMatchesKnn(img1, keypoints1, img3, keypoints2, matches, None,**draw_params)
+                                    
+                                    print(str(article_match) + ' number of matches: ' + str(matchesMask.count([1,0])) + ' / ' + str(len(good)))
+                                    new_item = item()
+                                    new_item.confidence = len(good)
+                                    new_item.name = str(article)
+                                    new_item.box_2d.x1 = dst[1,0,0]
+                                    new_item.box_2d.y1 = dst[3,0,1]
+                                    new_item.box_2d.x2 = dst[3,0,0]
+                                    new_item.box_2d.y2 = dst[1,0,1]
+                                    new_item.header = self.header
+                                    self.item_pub.publish(new_item)
+                                    # img3 = cv2.rectangle(stream, (int(new_item.box_2d.x1),int(new_item.box_2d.y1)),(int(new_item.box_2d.x2),int(new_item.box_2d.y2)), (0,255,0),2)
+                                    # cv2.imshow("results",img3)
+                                    # cv2.waitKey(10)
+                                else:
+                                    print("bbox out of range -- height: " + str(real_height*self.pixelRation) + " -- width: " + str(real_width*self.pixelRation))
+                                    print(str(pix_height) + " -- " + str(pix_width))
+                    # reset somewhere??
                 self.iterations += 1
                 if self.iterations > 2:
                     self.finished_pub.publish(True)
@@ -141,7 +160,8 @@ class find_item:
         # d435
         #rospy.Subscriber('/camera/color/image_raw', Image, self.image_callback_matching)
         # kinova
-        rospy.Subscriber('/my_gen3/vision_topic', Image, self.image_callback_matching)
+        rospy.Subscriber('/camera/color/image_raw', Image, self.image_callback_matching)
+        # rospy.Subscriber('/camera/depth_registered/sw_registered/image_rect', Image, self.image_callback_matching)
         
         rospy.Subscriber('/classification_search', Bool, self.processing_callback)
 

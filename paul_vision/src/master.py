@@ -31,10 +31,11 @@ class master_vision:
                     print('found')
                     # orientation camera (z,-x, -y) = orientation bras (x,y,z)
                     pose_pub = Pose()
-                    pose_pub.position.x = article.box_3d.depth - 0.05
-                    pose_pub.position.y = -article.box_3d.centerx + 0.02
-                    pose_pub.position.z = -article.box_3d.centery + 0.0625
+                    pose_pub.position.x = article.box_3d.depth -0.027060000225901604
+                    pose_pub.position.y = -article.box_3d.centerx + 0.009970000013709068
+                    pose_pub.position.z = -article.box_3d.centery + 0.004705999977886677
                     self.arm_pub.publish(pose_pub)
+                    # x = -0.027060000225901604 ; y = -0.009970000013709068 ; z = -0.004705999977886677
     
     def resquest_callback(self, request):
         self.classification_pub.publish(True)
