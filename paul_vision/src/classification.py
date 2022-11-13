@@ -17,32 +17,10 @@ class find_item:
     def __init__(self):
         self.article_path = ''
         self.bbox_array = []
-        cwd = rospkg.RosPack().get_path('paul_vision')
-        self.articles_folder = cwd + '/articles/'
-        self.articles_array = []
         self.iterations = 0
         self.camera_stream = None
-        for images in os.listdir(self.articles_folder):
-            if (images.endswith(".png")):
-                # image_path = self.articles_folder + images
-                self.articles_array.append(images)
         self.pixelRation = 35
         self.pixelRange = self.pixelRation * 2.15
-
-    # def item_callback(self, name):
-    #     #find unique article
-    #     cwd = rospkg.RosPack().get_path('paul_vision')
-    #     self.article_path = cwd + '/articles/' + name.data + '.png'
-    #     print(self.article_path)
-
-    #     # ajouter service avec database pour avoir autres informations
-    #     # height, width
-    #     # ajouter images sur le même étage seulement
-    #     self.articles_array = []
-    #     for images in os.listdir(self.articles_folder):
-    #         if (images.endswith(".png")):
-    #             # image_path = self.articles_folder + images
-    #             self.articles_array.append(images)
 
     def image_callback_matching(self, image):
         # to use without the segmentation pre-process
@@ -52,57 +30,63 @@ class find_item:
         except CvBridgeError as e:
             print("CvBridge could not convert images from realsense to opencv")
         
-    
-    def processing_callback(self, msg):
-        # print('request callback in classification')
-        if msg.data:
-            # decision arbitraire à revoir
-            sections = [[0,640], [240,900], [640,1280]]
-            # decision arbitraire à revoir
-            minimum_match = 40
-            article_match = ''
-            if self.camera_stream is not None:
-                for section in sections:
-                    stream = self.camera_stream.copy()
-                    img2 = stream[0:,section[0]:section[1]].copy()
-                    img2 = cv2.resize(img2,(img2.shape[1],img2.shape[0]))
-                    img2 = cv2.cvtColor(img2, cv2.COLOR_BGR2GRAY)
+    def nameRequest(self, name):
+        rospy.wait_for_service('sqlRequestName')
+        try:
+            db_request = rospy.ServiceProxy('sqlRequestName', itemDetailsName)
+            resp1 = db_request(str(name))
+        except rospy.ServiceException as e:
+            print("Service call failed: %s"%e)
+        return resp1
 
-                    sift = cv2.SIFT_create()
-                    keypoints2, descriptors2 = sift.detectAndCompute(img2, None)
-                    # print('************************')
-                    # iteration de tous les articles (ajouter étage par étage)
-                    for article in self.articles_array:
-                        # print(article)
-                        article_path = self.articles_folder + article
+
+    def processing_callback(self, msg):
+        print('new request for: ' + str(msg.data))
+        if self.camera_stream is not None:
+            iteration = 0
+            while iteration < 2:
+                # sections = [[0,640], [240,900], [640,1280]]
+                # for section in sections:
+                # img2 = stream[0:,section[0]:section[1]].copy()
+                # decision arbitraire à revoir
+                minimum_match = 40
+                article_match = ''
+                img2 = self.camera_stream.copy()
+                img2 = cv2.resize(img2,(img2.shape[1],img2.shape[0]))
+                img2 = cv2.cvtColor(img2, cv2.COLOR_BGR2GRAY)
+
+                sift = cv2.SIFT_create()
+                keypoints2, descriptors2 = sift.detectAndCompute(img2, None)
+                level =  self.nameRequest(msg.data + ".png").level
+                if level != 0:
+                    cwd = rospkg.RosPack().get_path('paul_vision')
+                    articles_folder = cwd + '/level' + str(int(level))+ '/'
+                    for article in os.listdir(articles_folder):
+                        article_path = articles_folder + article
                         img1 = cv2.imread(article_path,cv2.IMREAD_GRAYSCALE) # queryImage
                         img1 = cv2.normalize(img1, None, 0, 255, cv2.NORM_MINMAX)
                         
+                        # match stream and reference
                         keypoints1, descriptors1 = sift.detectAndCompute(img1, None)
-
                         FLAN_INDEX_KDTREE = 0
                         index_params = dict (algorithm = FLAN_INDEX_KDTREE, trees=5)
                         search_params = dict (checks=50)
-                        
                         flann = cv2.FlannBasedMatcher(index_params, search_params)
                         matches = flann.knnMatch (descriptors1, descriptors2, k=2)
-
                         matchesMask = [[0,0] for i in range(len(matches))]
                         for i,(m1, m2) in enumerate (matches):
                             if m1.distance < 0.5 * m2.distance:
                                 matchesMask[i] = [1,0]
+
                         # Sort by their distance.
                         matches = sorted(matches, key = lambda x:x[0].distance)
                         good = [m1 for (m1, m2) in matches if m1.distance < 0.7 * m2.distance]
                         
-                        # if matchesMask.count([1,0]) > minimum_match:
                         if len(good) > minimum_match and matchesMask.count([1,0])>15:
-                            # canvas = stream.copy()
-                            article_match = str(article)
-                            
+                            # change to bbox
                             src_pts = np.float32([ keypoints1[m.queryIdx].pt for m in good ]).reshape(-1,1,2)
                             dst_pts = np.float32([ keypoints2[m.trainIdx].pt for m in good ]).reshape(-1,1,2)
-                            dst_pts[:,0,0] += section[0]
+                            # dst_pts[:,0,0] += section[0]
                             M, mask = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC,5.0)
                             if M is not None:
                                 h,w = img1.shape[:2]
@@ -111,23 +95,12 @@ class find_item:
                                 # check size of articles on row
                                 pix_width  = (dst[3,0,0] - dst[1,0,0])
                                 pix_height = (dst[1,0,1] - dst[3,0,1])
-                                rospy.wait_for_service('sqlRequestName')
-                                try:
-                                    db_request = rospy.ServiceProxy('sqlRequestName', itemDetailsName)
-                                    resp1 = db_request(str(article))
-                                    real_width =  resp1.width
-                                    real_height = resp1.height
-                                except rospy.ServiceException as e:
-                                    print("Service call failed: %s"%e)
+                                resp1 = self.nameRequest(str(article))
+                                real_width =  resp1.width
+                                real_height = resp1.height
+                                # check bbox size
                                 if (pix_height <= ((real_height * self.pixelRation) + self.pixelRange ) and pix_height >= ((real_height * self.pixelRation) - self.pixelRange )) and (pix_width <= ((real_width * self.pixelRation) + self.pixelRange ) and pix_width >= ((real_width * self.pixelRation) - self.pixelRange )):
-                                    
-                                    # img3 = cv2.polylines(canvas,[np.int32(dst)],True,(0,255,0),3, cv2.LINE_AA)
-                                    # img3 = cv2.rectangle(canvas, (int(dst[0,0,0]),int(dst[0,0,1])),(int(dst[2,0,0]),dst[2,0,1]), (0,0,255),2)
-                                    # print(dst[:,0])
-                                    # draw_params = dict (matchColor = (0,0,255), singlePointColor = (0,255,0), matchesMask = matchesMask, flags=0 )
-                                    # flann_matches =cv2.drawMatchesKnn(img1, keypoints1, img3, keypoints2, matches, None,**draw_params)
-                                    
-                                    print(str(article_match) + ' number of matches: ' + str(matchesMask.count([1,0])) + ' / ' + str(len(good)))
+                                    print(str(article) + ' number of matches: ' + str(matchesMask.count([1,0])) + ' / ' + str(len(good)))
                                     new_item = item()
                                     new_item.confidence = len(good)
                                     new_item.name = str(article)
@@ -143,12 +116,8 @@ class find_item:
                                 else:
                                     print("bbox out of range -- height: " + str(real_height*self.pixelRation) + " -- width: " + str(real_width*self.pixelRation))
                                     print(str(pix_height) + " -- " + str(pix_width))
-                    # reset somewhere??
-                self.iterations += 1
-                if self.iterations > 2:
-                    self.finished_pub.publish(True)
-                else:
-                    self.finished_pub.publish(False)
+                iteration += 1   
+            self.finished_pub.publish(True)
 
 
     def shutdown(self):
@@ -157,13 +126,10 @@ class find_item:
     def classification(self):
         rospy.init_node('detection_node')
         # rospy.Subscriber('find_item', String, self.item_callback)
-        # d435
-        #rospy.Subscriber('/camera/color/image_raw', Image, self.image_callback_matching)
-        # kinova
+        # d435 and kinova
         rospy.Subscriber('/camera/color/image_raw', Image, self.image_callback_matching)
-        # rospy.Subscriber('/camera/depth_registered/sw_registered/image_rect', Image, self.image_callback_matching)
         
-        rospy.Subscriber('/classification_search', Bool, self.processing_callback)
+        rospy.Subscriber('/classification_search', String, self.processing_callback)
 
         self.item_pub = rospy.Publisher('/new_item', item, queue_size=5)
         self.finished_pub = rospy.Publisher('/classification_finished', Bool, queue_size=5)

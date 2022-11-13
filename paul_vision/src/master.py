@@ -23,9 +23,9 @@ class master_vision:
 
     def classification_task_callback(self, msg):
         if not msg.data:
-            self.classification_pub.publish(True)
+            self.classification_pub.publish(self.item_wanted)
         else:
-            self.classification_pub.publish(False)
+            self.classification_pub.publish('')
             for article in self.items_list.items:
                 if article.name == self.item_wanted:
                     print('found')
@@ -38,7 +38,7 @@ class master_vision:
                     # x = -0.027060000225901604 ; y = -0.009970000013709068 ; z = -0.004705999977886677
     
     def resquest_callback(self, request):
-        self.classification_pub.publish(True)
+        self.classification_pub.publish(request.data)
         self.item_wanted = request.data
 
 
@@ -52,7 +52,7 @@ class master_vision:
         rospy.Subscriber('/item_request', String, self.resquest_callback)
         rospy.Subscriber('/classified_items', classified_items, self.classified_articles_callback)
         self.arm_pub = rospy.Publisher('/arm_position_request', Pose, queue_size=1)
-        self.classification_pub = rospy.Publisher('/classification_search', Bool, queue_size=1)
+        self.classification_pub = rospy.Publisher('/classification_search', String, queue_size=1)
         rospy.spin() 
 
 
