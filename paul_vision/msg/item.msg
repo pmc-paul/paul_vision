@@ -1,5 +1,5 @@
 std_msgs/Header header
-int64 item_id
+string item_id
 string name
 int64 confidence
 paul_vision/BBox2d box_2d

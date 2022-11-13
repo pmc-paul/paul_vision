@@ -1,11 +1,22 @@
 <launch>
-
     <arg name="article"                default="None"/>
+
+    <arg name="rviz"                default="true"/>
+    <arg name="rviz_config_file"    default="rviz_cfg.rviz"/>
+    <arg name="rviz_cfg"            default="-d $(find paul_vision)/config/$(arg rviz_config_file)"/>
+    
+    <!-- launch vision nodes -->
+    <node name="classification" pkg="paul_vision" type="classification.py" output="screen"/>
+    <node name="transform_boxes" pkg="paul_vision" type="transform_boxes.py" output="screen"/>
+    <node name="item_filtering" pkg="paul_vision" type="item_filtering.py" output="screen"/>
+    <node name="visualisation" pkg="paul_vision" type="visualisation.py" output="screen"/>
+
+    <!-- Launch database -->
+    <node name="database" pkg="database" type="database_node" output="screen"/>
 
     <!-- Launch state machine nodes -->
     <node name="search_state_machine" pkg="paul_vision" type="search_state_machine.py" output="screen">
         <param name="article" value="$(arg article)"/>
     </node>
-
 
 </launch>

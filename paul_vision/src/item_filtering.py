@@ -3,6 +3,7 @@ import rospy
 import sys
 import os
 import numpy as np
+from std_msgs.msg import Bool, String
 from geometry_msgs.msg import Pose, PoseArray, PointStamped
 from cv_bridge import CvBridge, CvBridgeError
 from sensor_msgs.msg import CameraInfo, Image
@@ -118,15 +119,18 @@ class two_step_classification:
 #  mode sans segmentation
 class one_step_classification:
     def __init__(self):
-        self.id = 0
+        # self.id = 0
+        self.filtering = False
         self.classified_items = classified_items()
         self.request_sent = False
         rospy.Subscriber('/new_item', item, self.new_item_callback)
         self.classified_pub = rospy.Publisher('/classified_items', classified_items, queue_size=1)
         self.pose_array_pub = rospy.Publisher('/pose_array', PoseArray, queue_size=1)
+        rospy.Subscriber('/classification_finished', Bool, self.classification_callback)
 
 
     def new_item_callback(self, new_item):
+        self.filtering = True
         if len(self.classified_items.items)>0:
             match = None
             for article in self.classified_items.items:
@@ -137,16 +141,17 @@ class one_step_classification:
                     match = article.item_id
                     if new_item.confidence > article.confidence:
                         article.name = new_item.name
+                        article.item_id = new_item.item_id
                         article.confidence = new_item.confidence
                         article.box_2d = new_item.box_2d
-            if match is None and len(self.classified_items.items)<4:
-                # print('no match')
-                new_item.item_id = self.id
-                self.id += 1
+            if match is None: # and len(self.classified_items.items)<4:
+                # # print('no match')
+                # new_item.item_id = self.id
+                # self.id += 1
                 self.classified_items.items.append(new_item)
         elif len(self.classified_items.items) == 0:
-            new_item.item_id = self.id
-            self.id += 1
+            # new_item.item_id = self.id
+            # self.id += 1
             self.classified_items.items.append(new_item)
         for article in self.classified_items.items:
             # call service
@@ -159,7 +164,6 @@ class one_step_classification:
             except rospy.ServiceException as e:
                 print("Service call failed: %s"%e)
         if len(self.classified_items.items) > 0:
-            self.classified_pub.publish(self.classified_items)
             point_pub = PoseArray()
             for articles in self.classified_items.items:
                 points = Pose()
@@ -169,7 +173,14 @@ class one_step_classification:
                 point_pub.poses.append(points)
                 point_pub.header = articles.header
             self.pose_array_pub.publish(point_pub)
+        self.filtering = False
 
+    def classification_callback(self, msg):
+        print("found " + str(len(self.classified_items.items)) + " items")
+        while(self.filtering):
+            rospy.sleep(0.1)
+        if len(self.classified_items.items) > 0:
+            self.classified_pub.publish(self.classified_items)
 
     def get_iou(self, bb1, bb2):
 

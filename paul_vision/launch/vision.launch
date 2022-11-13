@@ -20,9 +20,9 @@
     <!-- Launch vision nodes -->
     <node name="classification" pkg="paul_vision" type="classification.py" output="screen"/>
     <node name="transform_boxes" pkg="paul_vision" type="transform_boxes.py" output="screen"/>
-    <node name="vision_database" pkg="paul_vision" type="vision_database.py" output="screen"/>
+    <node name="item_filtering" pkg="paul_vision" type="item_filtering.py" output="screen"/>
     <node name="visualisation" pkg="paul_vision" type="visualisation.py" output="screen"/>
-    <node name="master" pkg="paul_vision" type="master.py" output="screen"/>
+    <!-- <node name="master" pkg="paul_vision" type="master.py" output="screen"/> -->
 
     <!-- Launch database -->
     <node name="database" pkg="database" type="database_node" output="screen"/>

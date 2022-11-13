@@ -6,6 +6,7 @@ import rospy
 from cv_bridge import CvBridge, CvBridgeError
 from std_msgs.msg import String, Int64, Bool
 from paul_vision.msg import BBox2d, BBox2d_array, item, classified_items
+from paul_vision.srv import check, checkResponse
 from sensor_msgs.msg import Image
 import os
 bridge = CvBridge()
@@ -39,26 +40,30 @@ class find_item:
             print("Service call failed: %s"%e)
         return resp1
 
+    def handle_check(self, req):
+        if self.camera_stream is not None:
+            return checkResponse(True)
+        else:
+            return checkResponse(False)
 
     def processing_callback(self, msg):
-        print('new request for: ' + str(msg.data))
         if self.camera_stream is not None:
+            print('new request for: ' + str(msg.data))
             iteration = 0
-            while iteration < 2:
-                # sections = [[0,640], [240,900], [640,1280]]
-                # for section in sections:
-                # img2 = stream[0:,section[0]:section[1]].copy()
-                # decision arbitraire à revoir
+            sections = [[0,640], [240,900], [640,1280]]
+            for section in sections:
+            # decision arbitraire à revoir
                 minimum_match = 40
                 article_match = ''
-                img2 = self.camera_stream.copy()
+                stream = self.camera_stream.copy()
+                img2 = stream[0:,section[0]:section[1]].copy()
                 img2 = cv2.resize(img2,(img2.shape[1],img2.shape[0]))
                 img2 = cv2.cvtColor(img2, cv2.COLOR_BGR2GRAY)
 
                 sift = cv2.SIFT_create()
                 keypoints2, descriptors2 = sift.detectAndCompute(img2, None)
-                level =  self.nameRequest(msg.data + ".png").level
-                if level != 0:
+                level =  self.nameRequest(str(msg.data)).level
+                if level != '0.0':
                     cwd = rospkg.RosPack().get_path('paul_vision')
                     articles_folder = cwd + '/level' + str(int(level))+ '/'
                     for article in os.listdir(articles_folder):
@@ -81,12 +86,11 @@ class find_item:
                         # Sort by their distance.
                         matches = sorted(matches, key = lambda x:x[0].distance)
                         good = [m1 for (m1, m2) in matches if m1.distance < 0.7 * m2.distance]
-                        
                         if len(good) > minimum_match and matchesMask.count([1,0])>15:
                             # change to bbox
                             src_pts = np.float32([ keypoints1[m.queryIdx].pt for m in good ]).reshape(-1,1,2)
                             dst_pts = np.float32([ keypoints2[m.trainIdx].pt for m in good ]).reshape(-1,1,2)
-                            # dst_pts[:,0,0] += section[0]
+                            dst_pts[:,0,0] += section[0]
                             M, mask = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC,5.0)
                             if M is not None:
                                 h,w = img1.shape[:2]
@@ -98,12 +102,14 @@ class find_item:
                                 resp1 = self.nameRequest(str(article))
                                 real_width =  resp1.width
                                 real_height = resp1.height
+                                article_id = resp1.id
                                 # check bbox size
                                 if (pix_height <= ((real_height * self.pixelRation) + self.pixelRange ) and pix_height >= ((real_height * self.pixelRation) - self.pixelRange )) and (pix_width <= ((real_width * self.pixelRation) + self.pixelRange ) and pix_width >= ((real_width * self.pixelRation) - self.pixelRange )):
-                                    print(str(article) + ' number of matches: ' + str(matchesMask.count([1,0])) + ' / ' + str(len(good)))
+                                    # print(str(article) + ' number of matches: ' + str(matchesMask.count([1,0])) + ' / ' + str(len(good)))
                                     new_item = item()
                                     new_item.confidence = len(good)
                                     new_item.name = str(article)
+                                    new_item.item_id = article_id
                                     new_item.box_2d.x1 = dst[1,0,0]
                                     new_item.box_2d.y1 = dst[3,0,1]
                                     new_item.box_2d.x2 = dst[3,0,0]
@@ -116,7 +122,6 @@ class find_item:
                                 else:
                                     print("bbox out of range -- height: " + str(real_height*self.pixelRation) + " -- width: " + str(real_width*self.pixelRation))
                                     print(str(pix_height) + " -- " + str(pix_width))
-                iteration += 1   
             self.finished_pub.publish(True)
 
 
@@ -133,6 +138,8 @@ class find_item:
 
         self.item_pub = rospy.Publisher('/new_item', item, queue_size=5)
         self.finished_pub = rospy.Publisher('/classification_finished', Bool, queue_size=5)
+
+        s = rospy.Service('check_classification', check, self.handle_check)
 
         rospy.spin() 
         rospy.on_shutdown(self.shutdown)

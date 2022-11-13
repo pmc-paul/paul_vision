@@ -5,8 +5,10 @@ import smach
 import smach_ros
 import numpy as np
 from database.srv import *
-from std_msgs.msg import Bool
-from paul_vision.msg import item
+from std_msgs.msg import Bool, String
+from geometry_msgs.msg import Pose
+from paul_vision.msg import item, classified_items
+from paul_vision.srv import check
 
 # STATES
 # start
@@ -26,7 +28,7 @@ class start(smach.State):
 
 class logic_dispatch(smach.State):
     def __init__(self):
-        smach.State.__init__(self, outcomes=['moveArm','moveElevation','objectNotFound','FeatureMatching'], input_keys=['articleId'])
+        smach.State.__init__(self, outcomes=['moveArm','moveElevation','ObjectNotFound','FeatureMatching'], input_keys=['articleId'], output_keys=['articleName'])
         self.elevation_count = 0
         self.etagere_state = np.zeros((3,3))
         self.currentLevel = 1 # check level in execute with elevation service
@@ -35,9 +37,9 @@ class logic_dispatch(smach.State):
         rospy.wait_for_service('sqlRequest')
         try:
             db_request = rospy.ServiceProxy('sqlRequest', itemDetails)
-            resp1 = db_request(userdata.articleId)
+            resp1 = db_request(str(userdata.articleId))
             self.articleLevel =  resp1.level
-            print(self.articleLevel)
+            userdata.articleName = resp1.image_name
         except rospy.ServiceException as e:
             print("Service call failed: %s"%e)
         # # rospy.sleep(1)
@@ -71,13 +73,14 @@ class logic_dispatch(smach.State):
         # if pos_to_search != -1:
         #     return 'FeatureMatching'
         # else:
-        #     return 'objectNotFound'
+        #     return 'ObjectNotFound'
         return 'FeatureMatching'
 
 class moveArm(smach.State):
     def __init__(self):
         smach.State.__init__(self, outcomes=['logic_dispatch'], input_keys=['article'])
         self.counter = 0
+        self.arm_pub = rospy.Publisher('/arm_position_request', Pose, queue_size=1)
 
     def execute(self, userdata):
         return 'logic_dispatch'
@@ -93,32 +96,45 @@ class moveElevation(smach.State):
 # define state Bar
 class matching(smach.State):
     def __init__(self):
-        smach.State.__init__(self, outcomes=['notFound','grab'], output_keys=['item_info'], input_keys=['article'])        
-        self.request_pub = rospy.Publisher('/classification_search', Bool, queue_size=1)
-        self.identified_sub = rospy.Subscriber('/new_item', item, self.new_items_callback)
-        self.finished_sub = rospy.Subscriber('/classification_finished', Bool, self.finished_callback)
+        smach.State.__init__(self, outcomes=['notFound','grab'], output_keys=['item_info'], input_keys=['articleName', 'articleId'])        
+        self.request_pub = rospy.Publisher('/classification_search', String, queue_size=1)
+        rospy.Subscriber('/classified_items', classified_items, self.classified_articles_callback)
         self.finished = False
         self.items_found = []
 
     def execute(self, userdata):
-        rospy.loginfo('Executing state matching')
+        rospy.loginfo('searching for: ' + str(userdata.articleName))
+        
+        rospy.wait_for_service('check_classification')
+        response = False
+        while(not response):
+            try:
+                classification_request = rospy.ServiceProxy('check_classification', check)
+                response = classification_request(True).response
+            except rospy.ServiceException as e:
+                print("Service call failed: %s"%e)
+
+        self.request_pub.publish(userdata.articleName)
 
         while(not self.finished):
-            sleep(0.5)
+            rospy.sleep(0.2)
         
+        found = False
         if len(self.items_found)>0:
             for item in self.items_found:
-                if item.item_id == userdata.articleId:
+                print(item.item_id)
+                if item.item_id == str(userdata.articleId):
                     userdata.item_info = item
-                    return 'grab'
+                    print(userdata.item_info)
+                    found = True
+        if found:
+            return 'grab'
         else:
             return 'notFound'
 
-    def new_items_callback(self, msg):
-        self.items_found.append(msg.data)
-
-    def finished_callback(self, msg):
-        self.finished = msg.data
+    def classified_articles_callback(self, msg):
+        self.finished = True
+        self.items_found = msg.items
 
 class notFound(smach.State):
     def __init__(self):
@@ -131,19 +147,20 @@ class notFound(smach.State):
         
 class Grab(smach.State):
     def __init__(self):
-        smach.State.__init__(self, outcomes=['objectFound'], input_keys=['item_info'])
+        smach.State.__init__(self, outcomes=['ObjectFound'], input_keys=['item_info'])
+        self.arm_pub = rospy.Publisher('/arm_position_request', Pose, queue_size=1)
 
     def execute(self, userdata):
         rospy.loginfo('Executing state Grab')
         rospy.sleep(5)
-        return 'objectFound'
+        return 'ObjectFound'
 # main
 def main():
     rospy.init_node('smach_vision')
-    article = rospy.get_param('~article')
+    articleId = rospy.get_param('~article')
     # Create a SMACH state machine
     sm = smach.StateMachine(outcomes=[ 'ObjectFound', 'ObjectNotFound'])
-    sm.userdata.articleId = article
+    sm.userdata.articleId = articleId
     # Open the container
     with sm:
         # Add states to the container
@@ -154,13 +171,13 @@ def main():
         smach.StateMachine.add('FeatureMatching', matching(), 
                                transitions={'notFound':'notFound', 'grab':'Grab'})
         smach.StateMachine.add('Grab', Grab(),  
-                                transitions={'objectFound':'objectFound'})
+                                transitions={'ObjectFound':'ObjectFound'})
         smach.StateMachine.add('notFound', notFound(),  
                                 transitions={'logic_dispatch':'logic_dispatch'})
         smach.StateMachine.add('MoveElevation', moveElevation(), 
                                transitions={'logic_dispatch':'logic_dispatch'})
         smach.StateMachine.add('logic_dispatch', logic_dispatch(),
-                                transitions={'moveArm':'MoveArm','moveElevation':'MoveElevation','objectNotFound':'objectNotFound','FeatureMatching':'FeatureMatching'})   
+                                transitions={'moveArm':'MoveArm','moveElevation':'MoveElevation','ObjectNotFound':'ObjectNotFound','FeatureMatching':'FeatureMatching'})   
 
     # introspection server for smach GUI
     sis = smach_ros.IntrospectionServer('server_vision', sm, '/SM_ROOT')

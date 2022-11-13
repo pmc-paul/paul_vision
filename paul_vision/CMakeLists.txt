@@ -62,6 +62,7 @@ add_message_files(
 add_service_files(
   FILES
   change_2d_to_3d.srv
+  check.srv
 #   Service2.srv
 )
 
@@ -168,7 +169,7 @@ include_directories(
 ## in contrast to setup.py, you can choose the destination
 catkin_install_python(PROGRAMS
   src/transform_boxes.py
-  src/vision_database.py
+  src/item_filtering.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 
