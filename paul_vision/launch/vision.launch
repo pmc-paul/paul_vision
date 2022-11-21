@@ -6,13 +6,13 @@
     <arg name="rviz_cfg"            default="-d $(find paul_vision)/config/$(arg rviz_config_file)"/>
 
     <!-- Launch camera -->
-    <include file="$(find realsense2_camera)/launch/rs_camera.launch">    
+    <!-- <include file="$(find realsense2_camera)/launch/rs_camera.launch">    
         <arg name="filters" value="pointcloud"/>
         <arg name="align_depth" value="True"/>
         <arg name="color_width" value="1280"/>
         <arg name="color_height" value="720"/>
         <arg name="color_fps" value="30"/>
-    </include>
+    </include> -->
 
     <!-- Launch RVIZ -->
     <!-- <node if="$(arg rviz)" name="rviz" pkg="rviz" type="rviz" args="$(arg rviz_cfg)"/> -->

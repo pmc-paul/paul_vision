@@ -10,15 +10,6 @@ from geometry_msgs.msg import Pose
 from paul_vision.msg import item, classified_items
 from paul_vision.srv import check
 
-# STATES
-# start
-# logic
-# move to search
-## move elevation or move arm
-# feature match
-# grab item or not found
-# end
-
 class start(smach.State):
     def __init__(self):
         smach.State.__init__(self, outcomes=['logic_dispatch'])
@@ -28,7 +19,7 @@ class start(smach.State):
 
 class logic_dispatch(smach.State):
     def __init__(self):
-        smach.State.__init__(self, outcomes=['moveArm','moveElevation','ObjectNotFound','FeatureMatching'], input_keys=['articleId'], output_keys=['articleName'])
+        smach.State.__init__(self, outcomes=['moveArm','moveElevation','ObjectNotFound','FeatureMatching'], input_keys=['articleId'], output_keys=['articleName','searchPos','level'])
         self.elevation_count = 0
         self.etagere_state = np.zeros((3,3))
         self.currentLevel = 1 # check level in execute with elevation service
@@ -40,33 +31,21 @@ class logic_dispatch(smach.State):
             resp1 = db_request(str(userdata.articleId))
             self.articleLevel =  resp1.level
             userdata.articleName = resp1.image_name
+            userdata.level = self.articleLevel # (int)
         except rospy.ServiceException as e:
             print("Service call failed: %s"%e)
         # # rospy.sleep(1)
-        # goodLevel = False
-        # # move elevateur first
-        # if(np.any(self.etagere_state[self.articleLevel] == 0)):
-        #     # check level with elevateur
-        #     if self.currentLevel == self.articleLevel:
-        #         goodLevel = True
-        #     else:
-        #         goodLevel = False
-        #         return 'moveElevation'
-        #         #move elevateur service
-        #         # wait   
-        # #else to search other level
-        # else:
-        #     for level in range(len(self.etagere_state[:0])):
-        #         if np.any(self.etagere_state[level] == 0) :
-        #             # add user data
-        #            return 'moveElevation' 
-        # # move arm if necessary
-        # counter = 0
-        # pos_to_search = -1
-        # for position in self.etagere_state[1]:
-        #     if position == 0:
-        #         pos_to_search = counter
-        #     counter += 1
+        # move elevateur first
+        if self.currentLevel != self.articleLevel:
+            return 'moveElevation'
+        # move arm if necessary
+
+        counter = 0
+        for position in self.etagere_state[self.articleLevel]:
+            if position == 0:
+                userdata.searchPos = counter
+                return 'moveArm'
+            counter += 1
 
         # # check arm position and move arm
 
@@ -78,19 +57,46 @@ class logic_dispatch(smach.State):
 
 class moveArm(smach.State):
     def __init__(self):
-        smach.State.__init__(self, outcomes=['logic_dispatch'], input_keys=['article'])
+        smach.State.__init__(self, outcomes=['logic_dispatch'], input_keys=['searchPos', 'level'])
         self.counter = 0
         self.arm_pub = rospy.Publisher('/arm_position_request', Pose, queue_size=1)
 
     def execute(self, userdata):
+        rospy.sleep(1)
+        # service to arm with userdata.searchPos (int to Pose)
         return 'logic_dispatch'
+
+    def findPos(self, userdata):
+        if userdata.level == 0:
+            if userdata.searchPos == 0:
+                rospy.sleep(0.5)
+            elif userdata.searchPos == 1:
+                rospy.sleep(0.5)
+            elif userdata.searchPos == 2:
+                rospy.sleep(0.5)
+        elif userdata.level == 1:
+            if userdata.searchPos == 0:
+                rospy.sleep(0.5)
+            elif userdata.searchPos == 1:
+                rospy.sleep(0.5)
+            elif userdata.searchPos == 2:
+                rospy.sleep(0.5)
+        elif userdata.level == 2:
+            if userdata.searchPos == 0:
+                rospy.sleep(0.5)
+            elif userdata.searchPos == 1:
+                rospy.sleep(0.5)
+            elif userdata.searchPos == 2:
+                rospy.sleep(0.5)
+
 
 class moveElevation(smach.State):
     def __init__(self):
-        smach.State.__init__(self, outcomes=['logic_dispatch'], input_keys=['article'])
+        smach.State.__init__(self, outcomes=['logic_dispatch'], input_keys=['level'])
 
     def execute(self, userdata):
-        print('move elevation')
+        rospy.sleep(1)
+        #service to elevation with userdata.level (int)
         return 'logic_dispatch'
 
 # define state Bar
@@ -113,6 +119,7 @@ class matching(smach.State):
                 response = classification_request(True).response
             except rospy.ServiceException as e:
                 print("Service call failed: %s"%e)
+                rospy.sleep(0.5)
 
         self.request_pub.publish(userdata.articleName)
 
@@ -149,6 +156,7 @@ class Grab(smach.State):
     def __init__(self):
         smach.State.__init__(self, outcomes=['ObjectFound'], input_keys=['item_info'])
         self.arm_pub = rospy.Publisher('/arm_position_request', Pose, queue_size=1)
+        # envoyer topic a l'app web
 
     def execute(self, userdata):
         rospy.loginfo('Executing state Grab')
