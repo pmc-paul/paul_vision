@@ -9,6 +9,7 @@ from std_msgs.msg import Bool, String
 from geometry_msgs.msg import Pose
 from paul_vision.msg import item, classified_items
 from paul_vision.srv import check
+from paul_manipulation.srv import ArmPosition
 
 class start(smach.State):
     def __init__(self):
@@ -36,16 +37,16 @@ class logic_dispatch(smach.State):
             print("Service call failed: %s"%e)
         # # rospy.sleep(1)
         # move elevateur first
-        if self.currentLevel != self.articleLevel:
+        if self.currentLevel != int(self.articleLevel):
             return 'moveElevation'
-        # move arm if necessary
 
-        counter = 0
-        for position in self.etagere_state[self.articleLevel]:
-            if position == 0:
-                userdata.searchPos = counter
-                return 'moveArm'
-            counter += 1
+        # move arm if necessary
+        # counter = 0
+        # for position in self.etagere_state[int(self.articleLevel)]:
+        #     if position == 0:
+        #         userdata.searchPos = counter
+        #         return 'moveArm'
+        #     counter += 1
 
         # # check arm position and move arm
 
@@ -102,7 +103,7 @@ class moveElevation(smach.State):
 # define state Bar
 class matching(smach.State):
     def __init__(self):
-        smach.State.__init__(self, outcomes=['notFound','grab'], output_keys=['item_info'], input_keys=['articleName', 'articleId'])        
+        smach.State.__init__(self, outcomes=['notFound','grab'], output_keys=['item_info'], input_keys=['articleName', 'articleId','item_info'])        
         self.request_pub = rospy.Publisher('/classification_search', String, queue_size=1)
         rospy.Subscriber('/classified_items', classified_items, self.classified_articles_callback)
         self.finished = False
@@ -113,12 +114,14 @@ class matching(smach.State):
         
         rospy.wait_for_service('check_classification')
         response = False
-        while(not response):
+        counter =0
+        while(not response and counter<5):
             try:
                 classification_request = rospy.ServiceProxy('check_classification', check)
                 response = classification_request(True).response
             except rospy.ServiceException as e:
                 print("Service call failed: %s"%e)
+                counter +=1
                 rospy.sleep(0.5)
 
         self.request_pub.publish(userdata.articleName)
@@ -155,12 +158,31 @@ class notFound(smach.State):
 class Grab(smach.State):
     def __init__(self):
         smach.State.__init__(self, outcomes=['ObjectFound'], input_keys=['item_info'])
-        self.arm_pub = rospy.Publisher('/arm_position_request', Pose, queue_size=1)
+        # self.arm_pub = rospy.Publisher('/arm_position_request', Pose, queue_size=1)
         # envoyer topic a l'app web
 
     def execute(self, userdata):
         rospy.loginfo('Executing state Grab')
-        rospy.sleep(5)
+        item = userdata.item_info
+        pose3d = item.box_3d
+        pose_z_arm = pose3d.centery #+ 0.004705999977886677
+        ### change x,y selon pos actuelle du robot
+        pose_x_arm = pose3d.centerx #+ 0.009970000013709068
+        pose_y_arm = pose3d.depth #- 0.027060000225901604
+
+        rospy.wait_for_service('/my_gen3/arm_position')
+        try:
+            grab_request = rospy.ServiceProxy('/my_gen3/arm_position', ArmPosition)
+            posemsg = Pose()
+            posemsg.position.x = pose_x_arm
+            posemsg.position.y = pose_y_arm
+            posemsg.position.z = pose_z_arm
+            response = grab_request(posemsg).response
+            print(response)
+        except rospy.ServiceException as e:
+            print("Service call failed: %s"%e)
+
+        # rospy.sleep(5)
         return 'ObjectFound'
 # main
 def main():
