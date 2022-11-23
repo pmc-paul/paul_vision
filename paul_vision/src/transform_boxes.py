@@ -69,6 +69,9 @@ class transform:
             bounding_box_3d.y2 = result[1] / 1000
             bounding_box_3d.x2 = result[0] / 1000
             
+        if side < 0: # right, orientation inverted when shelf on the right of robot
+            bounding_box_3d.centerx = -bounding_box_3d.centerx
+            
         return change_2d_to_3dResponse(bounding_box_3d)
 
 

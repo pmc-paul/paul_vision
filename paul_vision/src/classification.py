@@ -20,8 +20,10 @@ class find_item:
         self.bbox_array = []
         self.iterations = 0
         self.camera_stream = None
-        self.pixelRation = 35
-        self.pixelRange = self.pixelRation * 2.15
+        # self.pixelRatio = 35
+        # self.pixelRange = self.pixelRatio * 2.15
+        self.pixelRatio = 40
+        self.pixelRange = self.pixelRatio * 2.15
 
     def image_callback_matching(self, image):
         # to use without the segmentation pre-process
@@ -104,12 +106,13 @@ class find_item:
                                 real_height = resp1.height
                                 article_id = resp1.id
                                 # check bbox size
-                                if (pix_height <= ((real_height * self.pixelRation) + self.pixelRange ) and pix_height >= ((real_height * self.pixelRation) - self.pixelRange )) and (pix_width <= ((real_width * self.pixelRation) + self.pixelRange ) and pix_width >= ((real_width * self.pixelRation) - self.pixelRange )):
+                                if (pix_height <= ((real_height * self.pixelRatio) + self.pixelRange ) and pix_height >= ((real_height * self.pixelRatio) - self.pixelRange )) and (pix_width <= ((real_width * self.pixelRatio) + self.pixelRange ) and pix_width >= ((real_width * self.pixelRatio) - self.pixelRange )):
                                     # print(str(article) + ' number of matches: ' + str(matchesMask.count([1,0])) + ' / ' + str(len(good)))
                                     new_item = item()
                                     new_item.confidence = len(good)
                                     new_item.name = str(article)
                                     new_item.item_id = article_id
+                                    new_item.width = real_width
                                     new_item.box_2d.x1 = dst[1,0,0]
                                     new_item.box_2d.y1 = dst[3,0,1]
                                     new_item.box_2d.x2 = dst[3,0,0]
@@ -120,7 +123,7 @@ class find_item:
                                     # cv2.imshow("results",img3)
                                     # cv2.waitKey(10)
                                 else:
-                                    print("bbox out of range -- height: " + str(real_height*self.pixelRation) + " -- width: " + str(real_width*self.pixelRation))
+                                    print("bbox out of range -- height: " + str(real_height*self.pixelRatio) + " -- width: " + str(real_width*self.pixelRatio))
                                     print(str(pix_height) + " -- " + str(pix_width))
             self.finished_pub.publish(True)
 

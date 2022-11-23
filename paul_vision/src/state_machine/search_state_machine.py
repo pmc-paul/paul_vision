@@ -23,7 +23,7 @@ class logic_dispatch(smach.State):
         smach.State.__init__(self, outcomes=['moveArm','moveElevation','ObjectNotFound','FeatureMatching'], input_keys=['articleId'], output_keys=['articleName','searchPos','level'])
         self.elevation_count = 0
         self.etagere_state = np.zeros((3,3))
-        self.currentLevel = 1 # check level in execute with elevation service
+        self.currentLevel = 3 # check level in execute with elevation service
 
     def execute(self, userdata):
         rospy.wait_for_service('sqlRequest')
@@ -165,19 +165,20 @@ class Grab(smach.State):
         rospy.loginfo('Executing state Grab')
         item = userdata.item_info
         pose3d = item.box_3d
-        pose_z_arm = pose3d.centery #+ 0.004705999977886677
+        pose_z_arm = pose3d.centery - 0.02
         ### change x,y selon pos actuelle du robot
-        pose_x_arm = pose3d.centerx #+ 0.009970000013709068
-        pose_y_arm = pose3d.depth #- 0.027060000225901604
+        pose_y_arm = pose3d.centerx - 0.009970000013709068
+        pose_x_arm = pose3d.depth - 0.12
 
         rospy.wait_for_service('/my_gen3/arm_position')
         try:
             grab_request = rospy.ServiceProxy('/my_gen3/arm_position', ArmPosition)
-            posemsg = Pose()
-            posemsg.position.x = pose_x_arm
-            posemsg.position.y = pose_y_arm
-            posemsg.position.z = pose_z_arm
-            response = grab_request(posemsg).response
+            posemsg = ArmPosition()
+            posemsg.pose.position.x = pose_x_arm
+            posemsg.pose.position.y = pose_y_arm
+            posemsg.pose.position.z = pose_z_arm
+            posemsg.grip = (8-item.width)/8
+            response = grab_request(posemsg).success
             print(response)
         except rospy.ServiceException as e:
             print("Service call failed: %s"%e)
