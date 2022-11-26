@@ -42,7 +42,7 @@ class transform:
         if self.intrinsics is not None and self.cv_image is not None:
             image_copy = self.cv_image.copy()
             # if image_copy[int(center[0]), int(center[1])] == 0 :
-            center = [centery+1, centerx]
+            center = [centery, centerx]
             pixel_search = 16
             neighboor_depth = []
             sum_depth = 0
@@ -52,22 +52,22 @@ class transform:
                     if curr_depth != 0:
                         neighboor_depth.append(curr_depth)
                         sum_depth += curr_depth
+            if len(neighboor_depth)>0:
+                mean_depth = sum_depth / len(neighboor_depth)
+                depth = mean_depth
+                
+                result = rs2.rs2_deproject_pixel_to_point(self.intrinsics, [center[1], center[0]], depth)
+                bounding_box_3d.centery = result[1] / 1000
+                bounding_box_3d.centerx = result[0] / 1000
+                bounding_box_3d.depth = result[2] / 1000
 
-            mean_depth = sum_depth / len(neighboor_depth)
-            depth = mean_depth
-            
-            result = rs2.rs2_deproject_pixel_to_point(self.intrinsics, [center[1], center[0]], depth)
-            bounding_box_3d.centery = result[1] / 1000
-            bounding_box_3d.centerx = result[0] / 1000
-            bounding_box_3d.depth = result[2] / 1000
+                result = rs2.rs2_deproject_pixel_to_point(self.intrinsics, [box.x1, box.y1], depth)
+                bounding_box_3d.y1 = result[1] / 1000
+                bounding_box_3d.x1 = result[0] / 1000
 
-            result = rs2.rs2_deproject_pixel_to_point(self.intrinsics, [box.x1, box.y1], depth)
-            bounding_box_3d.y1 = result[1] / 1000
-            bounding_box_3d.x1 = result[0] / 1000
-
-            result = rs2.rs2_deproject_pixel_to_point(self.intrinsics, [box.x2, box.y2], depth)
-            bounding_box_3d.y2 = result[1] / 1000
-            bounding_box_3d.x2 = result[0] / 1000
+                result = rs2.rs2_deproject_pixel_to_point(self.intrinsics, [box.x2, box.y2], depth)
+                bounding_box_3d.y2 = result[1] / 1000
+                bounding_box_3d.x2 = result[0] / 1000
             
         if side < 0: # right, orientation inverted when shelf on the right of robot
             bounding_box_3d.centerx = bounding_box_3d.centerx

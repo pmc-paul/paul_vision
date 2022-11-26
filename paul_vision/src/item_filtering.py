@@ -179,8 +179,8 @@ class one_step_classification:
         print("found " + str(len(self.classified_items.items)) + " items")
         while(self.filtering):
             rospy.sleep(0.1)
-        if len(self.classified_items.items) > 0:
-            self.classified_pub.publish(self.classified_items)
+        self.classified_pub.publish(self.classified_items)
+        self.classified_items = classified_items()
 
     def get_iou(self, bb1, bb2):
 

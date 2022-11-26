@@ -22,7 +22,8 @@ class find_item:
         self.camera_stream = None
         # self.pixelRatio = 35
         # self.pixelRange = self.pixelRatio * 2.15
-        self.pixelRatio = 40
+        # change with shelf...
+        self.pixelRatio = 30
         self.pixelRange = self.pixelRatio * 2.15
 
     def image_callback_matching(self, image):
@@ -52,80 +53,82 @@ class find_item:
         if self.camera_stream is not None:
             print('new request for: ' + str(msg.data))
             iteration = 0
-            sections = [[0,640], [240,900], [640,1280]]
-            for section in sections:
+            # sections = [[0,1280]]
+            # for section in sections:
             # decision arbitraire à revoir
-                minimum_match = 40
-                article_match = ''
-                stream = self.camera_stream.copy()
-                img2 = stream[0:,section[0]:section[1]].copy()
-                img2 = cv2.resize(img2,(img2.shape[1],img2.shape[0]))
-                img2 = cv2.cvtColor(img2, cv2.COLOR_BGR2GRAY)
+            minimum_match = 40
+            article_match = ''
+            img2 = self.camera_stream.copy()
+            # img2 = stream[0:,section[0]:section[1]].copy()
+            img2 = cv2.resize(img2,(img2.shape[1],img2.shape[0]))
+            img2 = cv2.cvtColor(img2, cv2.COLOR_BGR2GRAY)
 
-                sift = cv2.SIFT_create()
-                keypoints2, descriptors2 = sift.detectAndCompute(img2, None)
-                level =  self.nameRequest(str(msg.data)).level
-                if level != '0.0':
-                    cwd = rospkg.RosPack().get_path('paul_vision')
-                    articles_folder = cwd + '/level' + str(int(level))+ '/'
-                    for article in os.listdir(articles_folder):
-                        article_path = articles_folder + article
-                        img1 = cv2.imread(article_path,cv2.IMREAD_GRAYSCALE) # queryImage
-                        img1 = cv2.normalize(img1, None, 0, 255, cv2.NORM_MINMAX)
-                        
-                        # match stream and reference
-                        keypoints1, descriptors1 = sift.detectAndCompute(img1, None)
-                        FLAN_INDEX_KDTREE = 0
-                        index_params = dict (algorithm = FLAN_INDEX_KDTREE, trees=5)
-                        search_params = dict (checks=50)
-                        flann = cv2.FlannBasedMatcher(index_params, search_params)
-                        matches = flann.knnMatch (descriptors1, descriptors2, k=2)
-                        matchesMask = [[0,0] for i in range(len(matches))]
-                        for i,(m1, m2) in enumerate (matches):
-                            if m1.distance < 0.5 * m2.distance:
-                                matchesMask[i] = [1,0]
+            sift = cv2.SIFT_create()
+            keypoints2, descriptors2 = sift.detectAndCompute(img2, None)
+            level =  self.nameRequest(str(msg.data)).level
+            if level != '0.0':
+                cwd = rospkg.RosPack().get_path('paul_vision')
+                articles_folder = cwd + '/level' + str(int(level))+ '/'
+                for article in os.listdir(articles_folder):
+                    article_path = articles_folder + article
+                    img1 = cv2.imread(article_path,cv2.IMREAD_GRAYSCALE) # queryImage
+                    img1 = cv2.normalize(img1, None, 0, 255, cv2.NORM_MINMAX)
+                    
+                    # match stream and reference
+                    keypoints1, descriptors1 = sift.detectAndCompute(img1, None)
+                    FLAN_INDEX_KDTREE = 0
+                    index_params = dict (algorithm = FLAN_INDEX_KDTREE, trees=5)
+                    search_params = dict (checks=50)
+                    flann = cv2.FlannBasedMatcher(index_params, search_params)
+                    matches = flann.knnMatch (descriptors1, descriptors2, k=2)
+                    matchesMask = [[0,0] for i in range(len(matches))]
+                    for i,(m1, m2) in enumerate (matches):
+                        if m1.distance < 0.5 * m2.distance:
+                            matchesMask[i] = [1,0]
 
-                        # Sort by their distance.
-                        matches = sorted(matches, key = lambda x:x[0].distance)
-                        good = [m1 for (m1, m2) in matches if m1.distance < 0.7 * m2.distance]
-                        if len(good) > minimum_match and matchesMask.count([1,0])>15:
-                            # change to bbox
-                            src_pts = np.float32([ keypoints1[m.queryIdx].pt for m in good ]).reshape(-1,1,2)
-                            dst_pts = np.float32([ keypoints2[m.trainIdx].pt for m in good ]).reshape(-1,1,2)
-                            dst_pts[:,0,0] += section[0]
-                            M, mask = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC,5.0)
-                            if M is not None:
-                                h,w = img1.shape[:2]
-                                pts = np.float32([ [0,0],[0,h-1],[w-1,h-1],[w-1,0] ]).reshape(-1,1,2)
-                                dst = cv2.perspectiveTransform(pts,M)
-                                # check size of articles on row
-                                pix_width  = (dst[3,0,0] - dst[1,0,0])
-                                pix_height = (dst[1,0,1] - dst[3,0,1])
-                                resp1 = self.nameRequest(str(article))
-                                real_width =  resp1.width
-                                real_height = resp1.height
-                                article_id = resp1.id
-                                # check bbox size
-                                if (pix_height <= ((real_height * self.pixelRatio) + self.pixelRange ) and pix_height >= ((real_height * self.pixelRatio) - self.pixelRange )) and (pix_width <= ((real_width * self.pixelRatio) + self.pixelRange ) and pix_width >= ((real_width * self.pixelRatio) - self.pixelRange )):
-                                    # print(str(article) + ' number of matches: ' + str(matchesMask.count([1,0])) + ' / ' + str(len(good)))
-                                    new_item = item()
-                                    new_item.confidence = len(good)
-                                    new_item.name = str(article)
-                                    new_item.item_id = article_id
-                                    new_item.width = real_width
-                                    new_item.box_2d.x1 = dst[1,0,0]
-                                    new_item.box_2d.y1 = dst[3,0,1]
-                                    new_item.box_2d.x2 = dst[3,0,0]
-                                    new_item.box_2d.y2 = dst[1,0,1]
-                                    new_item.header = self.header
-                                    self.item_pub.publish(new_item)
-                                    # img3 = cv2.rectangle(stream, (int(new_item.box_2d.x1),int(new_item.box_2d.y1)),(int(new_item.box_2d.x2),int(new_item.box_2d.y2)), (0,255,0),2)
-                                    # cv2.imshow("results",img3)
-                                    # cv2.waitKey(10)
-                                else:
-                                    print("bbox out of range -- height: " + str(real_height*self.pixelRatio) + " -- width: " + str(real_width*self.pixelRatio))
-                                    print(str(pix_height) + " -- " + str(pix_width))
-            self.finished_pub.publish(True)
+                    # Sort by their distance.
+                    matches = sorted(matches, key = lambda x:x[0].distance)
+                    good = [m1 for (m1, m2) in matches if m1.distance < 0.7 * m2.distance]
+                    if len(good) > minimum_match and matchesMask.count([1,0])>15:
+                        # change to bbox
+                        src_pts = np.float32([ keypoints1[m.queryIdx].pt for m in good ]).reshape(-1,1,2)
+                        dst_pts = np.float32([ keypoints2[m.trainIdx].pt for m in good ]).reshape(-1,1,2)
+                        # dst_pts[:,0,0] += section[0]
+                        M, mask = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC,5.0)
+                        if M is not None:
+                            h,w = img1.shape[:2]
+                            pts = np.float32([ [0,0],[0,h-1],[w-1,h-1],[w-1,0] ]).reshape(-1,1,2)
+                            dst = cv2.perspectiveTransform(pts,M)
+                            # check size of articles on row
+                            pix_width  = (dst[3,0,0] - dst[1,0,0])
+                            pix_height = (dst[1,0,1] - dst[3,0,1])
+                            resp1 = self.nameRequest(str(article))
+                            real_width =  resp1.width
+                            real_height = resp1.height
+                            article_id = resp1.id
+                            # check bbox size
+                            if (pix_height <= ((real_height * self.pixelRatio) + self.pixelRange ) and pix_height >= ((real_height * self.pixelRatio) - self.pixelRange )) and (pix_width <= ((real_width * self.pixelRatio) + self.pixelRange ) and pix_width >= ((real_width * self.pixelRatio) - self.pixelRange )):
+                                # print(str(article) + ' number of matches: ' + str(matchesMask.count([1,0])) + ' / ' + str(len(good)))
+                                new_item = item()
+                                new_item.confidence = len(good)
+                                new_item.name = str(article)
+                                new_item.item_id = article_id
+                                new_item.width = real_width
+                                new_item.height_offset = resp1.height_offset
+                                new_item.box_2d.x1 = dst[1,0,0]
+                                new_item.box_2d.y1 = dst[3,0,1]
+                                new_item.box_2d.x2 = dst[3,0,0]
+                                new_item.box_2d.y2 = dst[1,0,1]
+                                new_item.header = self.header
+                                self.item_pub.publish(new_item)
+                                # img3 = cv2.rectangle(stream, (int(new_item.box_2d.x1),int(new_item.box_2d.y1)),(int(new_item.box_2d.x2),int(new_item.box_2d.y2)), (0,255,0),2)
+                                # cv2.imshow("results",img3)
+                                # cv2.waitKey(10)
+                            else:
+                                print("bbox out of range -- height: " + str(real_height*self.pixelRatio) + " -- width: " + str(real_width*self.pixelRatio))
+                                print(str(pix_height) + " -- " + str(pix_width))
+
+                self.finished_pub.publish(True)
 
 
     def shutdown(self):
