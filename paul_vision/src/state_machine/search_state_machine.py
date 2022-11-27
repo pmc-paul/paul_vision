@@ -10,7 +10,7 @@ from std_msgs.msg import Bool, String
 from geometry_msgs.msg import Pose
 from paul_vision.msg import item, classified_items
 from paul_vision.srv import check
-from paul_manipulation.srv import ArmPosition, ElevationVision, ArmPositionJoint
+from paul_manipulation.srv import ArmPositionGrab, ElevationVision, ArmPositionJoint, ArmPositionCartesian
 
 SHELF_1_POS_0 = (1.2569861273, 5.3750904974, 1.3330824827, 4.5211008944, 1.3259266327, 0.70389128733)
 SHELF_1_POS_1 = (1.2569861273, 5.3750904974, 1.3330824827, 4.5211008944, 1.3259266327, 0.70389128733)
@@ -77,12 +77,11 @@ class moveArm(smach.State):
     def __init__(self):
         smach.State.__init__(self, outcomes=['logic_dispatch','FeatureMatching'], input_keys=['searchPos', 'level'])
         self.counter = 0
-        self.posemsg = [0,0,0,0,0,0]
+        # self.posemsg = [0,0,0,0,0,0]
+        self.posemsg = Pose()
         self.pose_found = False
-        # self.arm_pub = rospy.Publisher('/arm_position_request', Pose, queue_size=1)
 
     def execute(self, userdata):
-        # rospy.sleep(1)
         # service to arm with userdata.searchPos (int to Pose)
         self.findPos(userdata)
         response = False
@@ -90,7 +89,7 @@ class moveArm(smach.State):
             rospy.sleep(0.1)
         rospy.wait_for_service('/my_gen3/arm_position_grab')
         try:
-            move_request = rospy.ServiceProxy('/my_gen3/arm_position', ArmPositionJoint)
+            move_request = rospy.ServiceProxy('/my_gen3/arm_position_cartesian', ArmPositionCartesian)
             response = move_request(self.posemsg).success
         except rospy.ServiceException as e:
             print("Service call failed: %s"%e)
@@ -101,7 +100,6 @@ class moveArm(smach.State):
     def findPos(self, userdata):
         # robot (acier) a 44 cm de l'etagere
         # only 3 and 4
-        # a retravailler lol
         if userdata.level == 1:
             if userdata.searchPos == 0:
                 self.pose_found = True
@@ -114,17 +112,37 @@ class moveArm(smach.State):
                 self.pose_found = True
         elif userdata.level == 3:
             if userdata.searchPos == 0:
-                self.posemsg = [-(2*pi-6.015277267), -(2*pi-5.679301386), 2.181661565, 2.8591983806, 1.2388347031, 1.6786576746]
+                self.posemsg.position.x = -0.606
+                self.posemsg.position.y = -0.1
+                self.posemsg.position.z = 0.301
+                self.posemsg.orientation.x = -90
+                self.posemsg.orientation.y = 180
+                self.posemsg.orientation.z = 90
                 self.pose_found = True
             elif userdata.searchPos == 1:
-                self.posemsg = [0.7189011189, -(2*pi-5.518207496), 1.899267292, -(2*pi-3.9196604341), 1.2187634167, 1.2547171993]
+                self.posemsg.position.x = -0.606
+                self.posemsg.position.y = 0.292
+                self.posemsg.position.z = 0.301
+                self.posemsg.orientation.x = -90
+                self.posemsg.orientation.y = 180
+                self.posemsg.orientation.z = 90
                 self.pose_found = True
         elif userdata.level == 4:
             if userdata.searchPos == 0:
-                self.posemsg = [-(2*pi-5.5955255819), 0.03490658504, 1.8421950255, 1.8606955156, 0.72623150175, 2.7501153024]
+                self.posemsg.position.x = -0.50
+                self.posemsg.position.y = -0.1
+                self.posemsg.position.z = 0.50
+                self.posemsg.orientation.x = -90
+                self.posemsg.orientation.y = 180
+                self.posemsg.orientation.z = 90
                 self.pose_found = True
             elif userdata.searchPos == 1:
-                self.posemsg = [-(2*pi-5.5955255819), 0.03490658504, 1.8421950255, 1.8606955156, 0.72623150175, 2.7501153024]
+                self.posemsg.position.x = -0.50
+                self.posemsg.position.y = 0.292
+                self.posemsg.position.z = 0.50
+                self.posemsg.orientation.x = -90
+                self.posemsg.orientation.y = 180
+                self.posemsg.orientation.z = 90
                 self.pose_found = True
 
 
@@ -169,9 +187,10 @@ class matching(smach.State):
                 rospy.sleep(0.5)
 
         self.request_pub.publish(userdata.articleName)
-
-        while(not self.finished):
+        counter =0
+        while(not self.finished and counter < 150):
             rospy.sleep(0.05)
+            counter+=1
             print("Classifying ...")
         
         found = False
@@ -219,7 +238,7 @@ class Grab(smach.State):
         # gauche pas assez a gauche
         rospy.wait_for_service('/my_gen3/arm_position_grab')
         try:
-            grab_request = rospy.ServiceProxy('/my_gen3/arm_position_grab', ArmPosition)
+            grab_request = rospy.ServiceProxy('/my_gen3/arm_position_grab', ArmPositionGrab)
             posemsg = Pose()
             posemsg.position.x = pose_x_arm
             posemsg.position.y = pose_y_arm

@@ -22,9 +22,6 @@ class find_item:
         self.camera_stream = None
         # self.pixelRatio = 35
         # self.pixelRange = self.pixelRatio * 2.15
-        # change with shelf...
-        self.pixelRatio = 30
-        self.pixelRange = self.pixelRatio * 2.15
 
     def image_callback_matching(self, image):
         # to use without the segmentation pre-process
@@ -66,6 +63,10 @@ class find_item:
             sift = cv2.SIFT_create()
             keypoints2, descriptors2 = sift.detectAndCompute(img2, None)
             level =  self.nameRequest(str(msg.data)).level
+            if level == 4.0:
+                self.pixelRatio = 30
+            else:
+                self.pixelRatio = 35
             if level != '0.0':
                 cwd = rospkg.RosPack().get_path('paul_vision')
                 articles_folder = cwd + '/level' + str(int(level))+ '/'

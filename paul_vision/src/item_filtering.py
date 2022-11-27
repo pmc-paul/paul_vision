@@ -178,6 +178,7 @@ class one_step_classification:
     def classification_callback(self, msg):
         print("found " + str(len(self.classified_items.items)) + " items")
         while(self.filtering):
+            print("filtering")
             rospy.sleep(0.1)
         self.classified_pub.publish(self.classified_items)
         self.classified_items = classified_items()
