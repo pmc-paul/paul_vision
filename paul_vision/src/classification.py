@@ -65,8 +65,10 @@ class find_item:
             level =  self.nameRequest(str(msg.data)).level
             if level == 4.0:
                 self.pixelRatio = 30
+                self.pixelRange = self.pixelRatio * 2.15
             else:
                 self.pixelRatio = 35
+                self.pixelRange = self.pixelRatio * 2.15
             if level != '0.0':
                 cwd = rospkg.RosPack().get_path('paul_vision')
                 articles_folder = cwd + '/level' + str(int(level))+ '/'

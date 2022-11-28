@@ -100,48 +100,55 @@ class moveArm(smach.State):
     def findPos(self, userdata):
         # robot (acier) a 44 cm de l'etagere
         # only 3 and 4
-        if userdata.level == 1:
+        if userdata.level == 2:
             if userdata.searchPos == 0:
-                self.pose_found = True
-            elif userdata.searchPos == 1:
-                self.pose_found = True
-        elif userdata.level == 2:
-            if userdata.searchPos == 0:
-                self.pose_found = True
-            elif userdata.searchPos == 1:
-                self.pose_found = True
-        elif userdata.level == 3:
-            if userdata.searchPos == 0:
-                self.posemsg.position.x = -0.606
-                self.posemsg.position.y = -0.1
-                self.posemsg.position.z = 0.301
+                self.posemsg.position.x = -0.56
+                self.posemsg.position.y = 0.04
+                self.posemsg.position.z = 0.122
                 self.posemsg.orientation.x = -90
-                self.posemsg.orientation.y = 180
+                self.posemsg.orientation.y = -179
                 self.posemsg.orientation.z = 90
                 self.pose_found = True
             elif userdata.searchPos == 1:
-                self.posemsg.position.x = -0.606
-                self.posemsg.position.y = 0.292
-                self.posemsg.position.z = 0.301
+                self.posemsg.position.x = -0.57
+                self.posemsg.position.y = 0.325
+                self.posemsg.position.z = 0.111
                 self.posemsg.orientation.x = -90
-                self.posemsg.orientation.y = 180
+                self.posemsg.orientation.y = -179
+                self.posemsg.orientation.z = 90
+                self.pose_found = True
+        elif userdata.level == 3:
+            if userdata.searchPos == 0:
+                self.posemsg.position.x = -0.57
+                self.posemsg.position.y = -0.05
+                self.posemsg.position.z = 0.347
+                self.posemsg.orientation.x = -90
+                self.posemsg.orientation.y = -179
+                self.posemsg.orientation.z = 90
+                self.pose_found = True
+            elif userdata.searchPos == 1:
+                self.posemsg.position.x = -0.56
+                self.posemsg.position.y = 0.338
+                self.posemsg.position.z = 0.346
+                self.posemsg.orientation.x = -90
+                self.posemsg.orientation.y = -179
                 self.posemsg.orientation.z = 90
                 self.pose_found = True
         elif userdata.level == 4:
             if userdata.searchPos == 0:
-                self.posemsg.position.x = -0.50
-                self.posemsg.position.y = -0.1
-                self.posemsg.position.z = 0.50
+                self.posemsg.position.x = -0.51
+                self.posemsg.position.y = 0.05
+                self.posemsg.position.z = 0.632
                 self.posemsg.orientation.x = -90
-                self.posemsg.orientation.y = 180
+                self.posemsg.orientation.y = -179
                 self.posemsg.orientation.z = 90
                 self.pose_found = True
             elif userdata.searchPos == 1:
-                self.posemsg.position.x = -0.50
-                self.posemsg.position.y = 0.292
-                self.posemsg.position.z = 0.50
+                self.posemsg.position.x = -0.51
+                self.posemsg.position.y = 0.32
+                self.posemsg.position.z = 0.623
                 self.posemsg.orientation.x = -90
-                self.posemsg.orientation.y = 180
+                self.posemsg.orientation.y = -179
                 self.posemsg.orientation.z = 90
                 self.pose_found = True
 
@@ -185,10 +192,10 @@ class matching(smach.State):
                 print("Service call failed: %s"%e)
                 counter +=1
                 rospy.sleep(0.5)
-
+        rospy.sleep(0.1) # camera auto focus?
         self.request_pub.publish(userdata.articleName)
         counter =0
-        while(not self.finished and counter < 150):
+        while(not self.finished and counter < 200):
             rospy.sleep(0.05)
             counter+=1
             print("Classifying ...")
@@ -233,7 +240,7 @@ class Grab(smach.State):
         pose_z_arm = pose3d.centery - 0.02 + (item.height_offset * 0.01)
         ### change x,y selon pos actuelle du robot
         pose_y_arm = pose3d.centerx - 0.01 # add when depth negative
-        pose_x_arm = pose3d.depth + 0.11 # -0.11 when depth negative
+        pose_x_arm = pose3d.depth + 0.10 # -0.11 when depth negative
         # live trop a droite pour item a droite
         # gauche pas assez a gauche
         rospy.wait_for_service('/my_gen3/arm_position_grab')
