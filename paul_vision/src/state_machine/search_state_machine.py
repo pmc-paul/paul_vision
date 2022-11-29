@@ -250,7 +250,7 @@ class Grab(smach.State):
             posemsg.position.x = pose_x_arm
             posemsg.position.y = pose_y_arm
             posemsg.position.z = pose_z_arm
-            grip = (10-item.width)/10
+            grip = (10-item.width)/10 +0.1
             if grip<0:
                 grip = 1
             response = grab_request(posemsg, grip).success
