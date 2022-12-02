@@ -63,11 +63,16 @@ class find_item:
             sift = cv2.SIFT_create()
             keypoints2, descriptors2 = sift.detectAndCompute(img2, None)
             level =  self.nameRequest(str(msg.data)).level
-            if level == 4.0:
-                self.pixelRatio = 30
+            if level == 4.0 or level ==3.0:
+                print("level 4")
+                self.pixelRatio = 35
+                self.pixelRange = self.pixelRatio * 2.15
+            elif level == 2.0 or level==1.0:
+                print("level 2")
+                self.pixelRatio = 40 # 30cm
                 self.pixelRange = self.pixelRatio * 2.15
             else:
-                self.pixelRatio = 35
+                self.pixelRatio = 40
                 self.pixelRange = self.pixelRatio * 2.15
             if level != '0.0':
                 cwd = rospkg.RosPack().get_path('paul_vision')
@@ -110,6 +115,8 @@ class find_item:
                             real_height = resp1.height
                             article_id = resp1.id
                             # check bbox size
+                            if real_width == 0.0:
+                                print(article)
                             if (pix_height <= ((real_height * self.pixelRatio) + self.pixelRange ) and pix_height >= ((real_height * self.pixelRatio) - self.pixelRange )) and (pix_width <= ((real_width * self.pixelRatio) + self.pixelRange ) and pix_width >= ((real_width * self.pixelRatio) - self.pixelRange )):
                                 # print(str(article) + ' number of matches: ' + str(matchesMask.count([1,0])) + ' / ' + str(len(good)))
                                 new_item = item()

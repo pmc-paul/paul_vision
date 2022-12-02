@@ -7,7 +7,8 @@ import rospkg
 from std_msgs.msg import String
 
 
-currentId =''
+global currentId
+currentId = ''
 
 def request_callback(article):
     # if sm not running
@@ -33,13 +34,7 @@ def main():
             parent = roslaunch.parent.ROSLaunchParent(uuid, path)
             parent.start()
             rospy.sleep(3)
-        else:
-            if(currentId is not ''):
-                print('Article request already being processed')
-            else:
-                print('Current article request empty')
-
-        rospy.sleep(2)
+        rospy.sleep(1)
     rospy.spin()
 
 if __name__ == '__main__':

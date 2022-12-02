@@ -23,14 +23,26 @@ SHELF_4_POS_1 = (1.3693853311, 5.6710983385, 1.029046127, 4.7001716756, 1.369734
 
 class start(smach.State):
     def __init__(self):
-        smach.State.__init__(self, outcomes=['logic_dispatch'])
+        smach.State.__init__(self, outcomes=['logic_dispatch'], output_keys=['articleId','searchPos'], input_keys=['articleId','searchPos'])
+        rospy.Subscriber('/ui_article_request', String, self.request_cb)
 
     def execute(self, userdata):
+        self.articleId = None
+        userdata.articleId = None
+        userdata.searchPos = 0
+        rospy.sleep(0.1)
+        while(userdata.articleId  is None):
+            if self.articleId is not None:
+                userdata.articleId  = self.articleId
+        print(userdata.articleId)
         return 'logic_dispatch'
+
+    def request_cb(self, request):
+        self.articleId = int(request.data)
 
 class logic_dispatch(smach.State):
     def __init__(self):
-        smach.State.__init__(self, outcomes=['moveArm','moveElevation','ObjectNotFound','FeatureMatching'], input_keys=['articleId', 'searchPos'], output_keys=['articleName','searchPos','level'])
+        smach.State.__init__(self, outcomes=['moveArm','moveElevation','start','FeatureMatching'], input_keys=['articleId', 'searchPos'], output_keys=['articleName','searchPos','level'])
         self.elevation_count = 0
         self.etagere_state = np.zeros((5,2))
         self.currentLevel = 0 # check level in execute with elevation service
@@ -64,7 +76,7 @@ class logic_dispatch(smach.State):
         if userdata.searchPos < 2:
             return 'moveArm'
         else:
-            return 'ObjectNotFound'
+            return 'start'
 
         # # check arm position and move arm
 
@@ -83,74 +95,14 @@ class moveArm(smach.State):
 
     def execute(self, userdata):
         # service to arm with userdata.searchPos (int to Pose)
-        self.findPos(userdata)
-        response = False
-        while(not self.pose_found):
-            rospy.sleep(0.1)
         rospy.wait_for_service('/my_gen3/arm_position_grab')
         try:
             move_request = rospy.ServiceProxy('/my_gen3/arm_position_cartesian', ArmPositionCartesian)
-            response = move_request(self.posemsg).success
+            response = move_request(int(userdata.level), int(userdata.searchPos)).success
         except rospy.ServiceException as e:
             print("Service call failed: %s"%e)
-        while(not response):
-            rospy.sleep(0.05)
+        rospy.sleep(0.5)
         return 'FeatureMatching'
-
-    def findPos(self, userdata):
-        # robot (acier) a 44 cm de l'etagere
-        # only 3 and 4
-        if userdata.level == 2:
-            if userdata.searchPos == 0:
-                self.posemsg.position.x = -0.56
-                self.posemsg.position.y = 0.04
-                self.posemsg.position.z = 0.122
-                self.posemsg.orientation.x = -90
-                self.posemsg.orientation.y = -179
-                self.posemsg.orientation.z = 90
-                self.pose_found = True
-            elif userdata.searchPos == 1:
-                self.posemsg.position.x = -0.57
-                self.posemsg.position.y = 0.325
-                self.posemsg.position.z = 0.111
-                self.posemsg.orientation.x = -90
-                self.posemsg.orientation.y = -179
-                self.posemsg.orientation.z = 90
-                self.pose_found = True
-        elif userdata.level == 3:
-            if userdata.searchPos == 0:
-                self.posemsg.position.x = -0.57
-                self.posemsg.position.y = -0.05
-                self.posemsg.position.z = 0.347
-                self.posemsg.orientation.x = -90
-                self.posemsg.orientation.y = -179
-                self.posemsg.orientation.z = 90
-                self.pose_found = True
-            elif userdata.searchPos == 1:
-                self.posemsg.position.x = -0.56
-                self.posemsg.position.y = 0.338
-                self.posemsg.position.z = 0.346
-                self.posemsg.orientation.x = -90
-                self.posemsg.orientation.y = -179
-                self.posemsg.orientation.z = 90
-                self.pose_found = True
-        elif userdata.level == 4:
-            if userdata.searchPos == 0:
-                self.posemsg.position.x = -0.51
-                self.posemsg.position.y = 0.05
-                self.posemsg.position.z = 0.632
-                self.posemsg.orientation.x = -90
-                self.posemsg.orientation.y = -179
-                self.posemsg.orientation.z = 90
-                self.pose_found = True
-            elif userdata.searchPos == 1:
-                self.posemsg.position.x = -0.51
-                self.posemsg.position.y = 0.32
-                self.posemsg.position.z = 0.623
-                self.posemsg.orientation.x = -90
-                self.posemsg.orientation.y = -179
-                self.posemsg.orientation.z = 90
-                self.pose_found = True
 
 
 class moveElevation(smach.State):
@@ -195,8 +147,8 @@ class matching(smach.State):
         rospy.sleep(0.1) # camera auto focus?
         self.request_pub.publish(userdata.articleName)
         counter =0
-        while(not self.finished and counter < 200):
-            rospy.sleep(0.05)
+        while(not self.finished and counter < 150):
+            rospy.sleep(0.1)
             counter+=1
             print("Classifying ...")
         
@@ -229,7 +181,7 @@ class notFound(smach.State):
         
 class Grab(smach.State):
     def __init__(self):
-        smach.State.__init__(self, outcomes=['ObjectFound'], input_keys=['item_info'])
+        smach.State.__init__(self, outcomes=['start'], input_keys=['item_info'])
         # self.arm_pub = rospy.Publisher('/arm_position_request', Pose, queue_size=1)
         # envoyer topic a l'app web
 
@@ -237,10 +189,10 @@ class Grab(smach.State):
         rospy.loginfo('Executing state Grab')
         item = userdata.item_info
         pose3d = item.box_3d
-        pose_z_arm = pose3d.centery - 0.02 + (item.height_offset * 0.01)
+        pose_z_arm = pose3d.centery - 0.03 + (item.height_offset * 0.01)
         ### change x,y selon pos actuelle du robot
-        pose_y_arm = pose3d.centerx - 0.01 # add when depth negative
-        pose_x_arm = pose3d.depth + 0.10 # -0.11 when depth negative
+        pose_y_arm = pose3d.centerx # - 0.01 # add when depth negative
+        pose_x_arm = pose3d.depth + 0.12 # -0.11 when depth negative
         # live trop a droite pour item a droite
         # gauche pas assez a gauche
         rospy.wait_for_service('/my_gen3/arm_position_grab')
@@ -250,23 +202,25 @@ class Grab(smach.State):
             posemsg.position.x = pose_x_arm
             posemsg.position.y = pose_y_arm
             posemsg.position.z = pose_z_arm
-            grip = (10-item.width)/10 +0.1
+            grip = (10-item.width)/10 + 0.05
             if grip<0:
                 grip = 1
+            if grip<0.2:
+                grip += 0.08
             response = grab_request(posemsg, grip).success
             print(response)
         except rospy.ServiceException as e:
             print("Service call failed: %s"%e)
 
         # rospy.sleep(5)
-        return 'ObjectFound'
+        return 'start'
 # main
 def main():
     rospy.init_node('smach_vision')
-    articleId = rospy.get_param('~article')
+    # articleId = rospy.get_param('~article')
     # Create a SMACH state machine
     sm = smach.StateMachine(outcomes=[ 'ObjectFound', 'ObjectNotFound'])
-    sm.userdata.articleId = articleId
+    sm.userdata.articleId = None
     sm.userdata.searchPos = 0
     # Open the container
     with sm:
@@ -278,13 +232,13 @@ def main():
         smach.StateMachine.add('FeatureMatching', matching(), 
                                transitions={'notFound':'notFound', 'grab':'Grab'})
         smach.StateMachine.add('Grab', Grab(),  
-                                transitions={'ObjectFound':'ObjectFound'})
+                                transitions={'start':'start'})
         smach.StateMachine.add('notFound', notFound(),  
                                 transitions={'logic_dispatch':'logic_dispatch'})
         smach.StateMachine.add('MoveElevation', moveElevation(), 
                                transitions={'logic_dispatch':'logic_dispatch'})
         smach.StateMachine.add('logic_dispatch', logic_dispatch(),
-                                transitions={'moveArm':'MoveArm','moveElevation':'MoveElevation','ObjectNotFound':'ObjectNotFound','FeatureMatching':'FeatureMatching'})   
+                                transitions={'moveArm':'MoveArm','moveElevation':'MoveElevation','start':'start','FeatureMatching':'FeatureMatching'})   
 
     # introspection server for smach GUI
     sis = smach_ros.IntrospectionServer('server_vision', sm, '/SM_ROOT')
