@@ -101,7 +101,7 @@ class moveArm(smach.State):
             response = move_request(int(userdata.level), int(userdata.searchPos)).success
         except rospy.ServiceException as e:
             print("Service call failed: %s"%e)
-        rospy.sleep(0.5)
+        rospy.sleep(0.8)
         return 'FeatureMatching'
 
 
@@ -189,7 +189,7 @@ class Grab(smach.State):
         rospy.loginfo('Executing state Grab')
         item = userdata.item_info
         pose3d = item.box_3d
-        pose_z_arm = pose3d.centery - 0.03 + (item.height_offset * 0.01)
+        pose_z_arm = pose3d.centery - 0.02 + (item.height_offset * 0.01)
         ### change x,y selon pos actuelle du robot
         pose_y_arm = pose3d.centerx # - 0.01 # add when depth negative
         pose_x_arm = pose3d.depth + 0.12 # -0.11 when depth negative
