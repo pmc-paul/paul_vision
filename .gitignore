@@ -3,7 +3,3 @@ paul_vision/test-1.bag
 paul_vision/.vscode/browse.vc.db
 paul_vision/model.pb
 paul-vision-RPC2.zip
-paul_vision/src/box_poses.py
-paul_vision/src/clustering.cpp
-paul_vision/src/keras_to_tf.py
-paul_vision/src/publisher.py
