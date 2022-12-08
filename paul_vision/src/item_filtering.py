@@ -3,22 +3,16 @@ import rospy
 import sys
 import os
 import numpy as np
-from geometry_msgs.msg import Pose, PointStamped
+from std_msgs.msg import Bool, String
+from geometry_msgs.msg import Pose, PoseArray, PointStamped
 from cv_bridge import CvBridge, CvBridgeError
 from sensor_msgs.msg import CameraInfo, Image
 from realsense2_camera.msg import Extrinsics
-from paul_vision.msg import BBox2d, BBox2d_array, BBox3d, BBox3d_array, article, classified_items
+from paul_vision.msg import BBox2d, BBox2d_array, item, classified_items
+from paul_vision.msg import *
+from paul_vision.srv import *
 import pyrealsense2 as rs2
 import cv2
-
-## bounding boxes complete info:
-# bounding box 3d from original
-# original arm pose
-# current arm pose
-# current 2d pose in video feed
-# number id
-# class (food)
-# confidence (number of features matched)
 
 # mode avec segmentation
 class two_step_classification:
@@ -124,74 +118,91 @@ class two_step_classification:
 
 #  mode sans segmentation
 class one_step_classification:
+    def __init__(self):
+        # self.id = 0
+        self.filtering = False
+        self.classified_items = classified_items()
+        self.request_sent = False
+        rospy.Subscriber('/new_item', item, self.new_item_callback)
+        self.classified_pub = rospy.Publisher('/classified_items', classified_items, queue_size=1)
+        self.pose_array_pub = rospy.Publisher('/pose_array', PoseArray, queue_size=1)
+        rospy.Subscriber('/classification_finished', Bool, self.classification_callback)
 
-    # callback pour chaque match + 25 points
-    # comparaison iou pour bounding box
-    # assignement d'un id si nouvelle boite
-    # comparaison confidence si pas nouveau
-    # changement nom et confidence si nouveau match meilleur
 
+    def new_item_callback(self, new_item):
+        self.filtering = True
+        if len(self.classified_items.items)>0:
+            match = None
+            for article in self.classified_items.items:
+                # changer nms pour traiter boite par ordre de confiance
+                iou = self.get_iou(new_item.box_2d, article.box_2d)
+                # print(str(iou) +' ' + article.name + new_item.name)
+                if iou > 0.50:
+                    match = article.item_id
+                    if new_item.confidence > article.confidence:
+                        article.name = new_item.name
+                        article.item_id = new_item.item_id
+                        article.confidence = new_item.confidence
+                        article.box_2d = new_item.box_2d
+            if match is None: # and len(self.classified_items.items)<4:
+                # # print('no match')
+                # new_item.item_id = self.id
+                # self.id += 1
+                self.classified_items.items.append(new_item)
+        elif len(self.classified_items.items) == 0:
+            # new_item.item_id = self.id
+            # self.id += 1
+            self.classified_items.items.append(new_item)
+        for article in self.classified_items.items:
+            # call service
+            rospy.wait_for_service('change_2d_to_3d')
+            try:
+                transform = rospy.ServiceProxy('change_2d_to_3d', change_2d_to_3d)
+                bounding_box_3d = BBox3d()
+                bounding_box_3d = transform(article.box_2d).box_3d
+                article.box_3d = bounding_box_3d
+            except rospy.ServiceException as e:
+                print("Service call failed: %s"%e)
+        if len(self.classified_items.items) > 0:
+            point_pub = PoseArray()
+            for articles in self.classified_items.items:
+                points = Pose()
+                points.position.x = articles.box_3d.centerx
+                points.position.y = articles.box_3d.centery
+                points.position.z = articles.box_3d.depth 
+                point_pub.poses.append(points)
+                point_pub.header = articles.header
+            self.pose_array_pub.publish(point_pub)
+        self.filtering = False
 
+    def classification_callback(self, msg):
+        print("found " + str(len(self.classified_items.items)) + " items")
+        while(self.filtering):
+            print("filtering")
+            rospy.sleep(0.1)
+        self.classified_pub.publish(self.classified_items)
+        self.classified_items = classified_items()
 
-    def get_iou(bb1, bb2):
-        """
-        Calculate the Intersection over Union (IoU) of two bounding boxes.
+    def get_iou(self, bb1, bb2):
 
-        Parameters
-        ----------
-        bb1 : dict
-            Keys: {'x1', 'x2', 'y1', 'y2'}
-            The (x1, y1) position is at the top left corner,
-            the (x2, y2) position is at the bottom right corner
-        bb2 : dict
-            Keys: {'x1', 'x2', 'y1', 'y2'}
-            The (x, y) position is at the top left corner,
-            the (x2, y2) position is at the bottom right corner
-
-        Returns
-        -------
-        float
-            in [0, 1]
-        """
-        # assert bb1['x1'] < bb1['x2']
-        # assert bb1['y1'] < bb1['y2']
-        # assert bb2['x1'] < bb2['x2']
-        # assert bb2['y1'] < bb2['y2']
-
-        # determine the coordinates of the intersection rectangle
-        x_left = max(bb1['x1'], bb2['x1'])
-        y_top = max(bb1['y1'], bb2['y1'])
-        x_right = min(bb1['x2'], bb2['x2'])
-        y_bottom = min(bb1['y2'], bb2['y2'])
+        x_left = max(bb1.x1, bb2.x1)
+        y_top = max(bb1.y1, bb2.y1)
+        x_right = min(bb1.x2, bb2.x2)
+        y_bottom = min(bb1.y2, bb2.y2)
 
         if x_right < x_left or y_bottom < y_top:
             return 0.0
 
-        # The intersection of two axis-aligned bounding boxes is always an
-        # axis-aligned bounding box
         intersection_area = (x_right - x_left) * (y_bottom - y_top)
 
-        # compute the area of both AABBs
-        bb1_area = (bb1['x2'] - bb1['x1']) * (bb1['y2'] - bb1['y1'])
-        bb2_area = (bb2['x2'] - bb2['x1']) * (bb2['y2'] - bb2['y1'])
+        bb1_area = (bb1.x2 - bb1.x1) * (bb1.y2 - bb1.y1)
+        bb2_area = (bb2.x2 - bb2.x1) * (bb2.y2 - bb2.y1)
 
-        # compute the intersection over union by taking the intersection
-        # area and dividing it by the sum of prediction + ground-truth
-        # areas - the interesection area
         iou = intersection_area / float(bb1_area + bb2_area - intersection_area)
-        # assert iou >= 0.0
-        # assert iou <= 1.0
         return iou
 
 def main():
-    depth_image_topic = '/camera/aligned_depth_to_color/image_raw'
-    depth_info_topic = '/camera/aligned_depth_to_color/camera_info'
-    bbox_3d_topic = '/bounding_boxes_3d'
-    # bbox_classification_topic = 
-
-    
-    node = two_step_classification()
-    # node = one_step_classification()
+    node = one_step_classification()
     rospy.spin()
 
 if __name__ == '__main__':

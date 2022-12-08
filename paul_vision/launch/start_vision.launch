@@ -1,31 +1,22 @@
 <launch>
+    <arg name="article"                default="None"/>
 
     <arg name="rviz"                default="true"/>
-    <arg name="frame"               default="camera_depth_optical_frame"/>
     <arg name="rviz_config_file"    default="rviz_cfg.rviz"/>
     <arg name="rviz_cfg"            default="-d $(find paul_vision)/config/$(arg rviz_config_file)"/>
-
-    <!-- Launch camera -->
-    <!-- <include file="$(find realsense2_camera)/launch/rs_camera.launch">    
-        <arg name="filters" value="pointcloud"/>
-        <arg name="align_depth" value="True"/>
-        <arg name="color_width" value="1280"/>
-        <arg name="color_height" value="720"/>
-        <arg name="color_fps" value="30"/>
-    </include> -->
-
-    <!-- Launch RVIZ -->
-    <!-- <node if="$(arg rviz)" name="rviz" pkg="rviz" type="rviz" args="$(arg rviz_cfg)"/> -->
-
-    <!-- Launch vision nodes -->
+    
+    <!-- launch vision nodes -->
     <node name="classification" pkg="paul_vision" type="classification.py" output="screen"/>
     <node name="transform_boxes" pkg="paul_vision" type="transform_boxes.py" output="screen"/>
     <node name="item_filtering" pkg="paul_vision" type="item_filtering.py" output="screen"/>
     <node name="visualisation" pkg="paul_vision" type="visualisation.py" output="screen"/>
-    <!-- <node name="master" pkg="paul_vision" type="master.py" output="screen"/> -->
 
     <!-- Launch database -->
     <node name="database" pkg="database" type="database_node" output="screen"/>
 
+    <!-- Launch state machine nodes -->
+    <node name="search_state_machine" pkg="paul_vision" type="search_state_machine.py" output="screen">
+        <param name="article" value="$(arg article)"/>
+    </node>
 
 </launch>
